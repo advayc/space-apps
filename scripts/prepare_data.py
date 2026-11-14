@@ -205,7 +205,7 @@ def write_grid(output, name, years, data, *, compact=False):
         packed[valid] = np.clip(np.rint(data[valid] / precision), -32767, 32767)
         entry["precision"] = precision
         data = packed
-    payload = gzip.compress(data.tobytes(), compresslevel=5 if compact else 7, mtime=0)
+    payload = gzip.compress(data.tobytes(), compresslevel=9, mtime=0)
     filename = f"{name}-{sha256(payload).hexdigest()[:10]}.bin"
     (output / filename).write_bytes(payload)
     return {**entry, "file": filename}
@@ -225,7 +225,8 @@ def main():
             continue
         periods = grids(path, key, meta)
         _, step, (years, data) = next(periods)
-        annual = write_grid(args.output, key, years, data)
+        # Annual grids are packed like the sub-annual ones: about 2.5x smaller to download.
+        annual = write_grid(args.output, key, years, data, compact=True)
         subannual = {
             period: write_grid(args.output, f"{key}-{period}", period_years, period_data, compact=True)
             for period, _, (period_years, period_data) in periods
@@ -237,7 +238,7 @@ def main():
             "sourceSha256": sha256(path.read_bytes()).hexdigest(),
         }
         print(f"{key}: {years[0]}–{years[-1]} annual, {len(subannual)} monthly and seasonal series")
-    (args.output / "catalog.json").write_text(json.dumps(datasets, indent=2, ensure_ascii=False) + "\n")
+    (args.output / "catalog.json").write_text(json.dumps(datasets, ensure_ascii=False, separators=(",", ":")))
 
 
 if __name__ == "__main__":

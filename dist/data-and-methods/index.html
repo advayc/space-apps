@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="The data sources and statistical methods behind Earth Trend Atlas.">
-<meta name="theme-color" content="#f4f3ed">
+<meta name="theme-color" content="#f2f0e9">
 <title>Data &amp; methods | Earth Trend Atlas</title>
-<script src="../theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="../theme.js?v=2"></script>
 <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
@@ -45,6 +48,14 @@
     <section>
       <h2>How trends are tested</h2>
       <p>The trend is the least squares slope across 30 consecutive years for the period shown. The trend map uses annual values. The location panel uses the chosen month or season when a shorter period is selected. Slopes are expressed per decade. The confidence interval and two-sided p-value use a Newey–West<a class="cite" href="#ref-7">[7]</a> standard error with three annual lags and an approximate normal reference distribution. The map colors represent slope magnitude. Each significance test applies to a single cell, without adjustment for multiple comparisons. The interval describes regression uncertainty and excludes uncertainty in the input dataset.</p>
+    </section>
+    <section id="projections">
+      <h2>Projected years</h2>
+      <p>The timeline continues past the last measured year to 2100, in violet. Formulas, the hindcast table, and limits are on the <a href="../projections/">projections</a> page.</p>
+    </section>
+    <section id="downloads">
+      <h2>Downloads and precision</h2>
+      <p>The location panel exports the measured series, the fitted trend line, and the projection as CSV, the fit statistics as JSON, and the chart and map as PNG images. Each file names the source dataset. To keep downloads small, grids are stored as 16-bit integers with a step of about 0.002 in the layer’s unit (up to 0.009 W/m² for sensible heat flux), far below the uncertainty of the data. For full precision, use the original files linked under “Where this data comes from” on the atlas page.</p>
     </section>
     <section>
       <h2>Credits</h2>

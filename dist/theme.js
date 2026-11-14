@@ -17,24 +17,47 @@
   }
 
   apply();
-  document.addEventListener('DOMContentLoaded', () => {
+
+  function bootTheme() {
     const button = document.getElementById('theme');
-    function update() {
+    if (!button || button.dataset.ready === 'true') return;
+    button.dataset.ready = 'true';
+    const icon = button.querySelector('span');
+
+    function paint() {
+      const action = theme === 'dark' ? 'Light mode' : 'Dark mode';
+      button.replaceChildren(icon, document.createTextNode(' ' + action));
+      button.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+      button.title = action + ' (D)';
+      button.setAttribute('aria-keyshortcuts', 'D');
+    }
+
+    function setTheme(next) {
+      theme = next;
+      try { localStorage.setItem(key, theme); } catch {}
       apply();
-      button.setAttribute('aria-pressed', theme === 'dark');
+      paint();
       document.dispatchEvent(new Event('atlas-theme-change'));
     }
-    button.setAttribute('aria-pressed', theme === 'dark');
-    button.addEventListener('click', () => {
-      theme = theme === 'dark' ? 'light' : 'dark';
-      try { localStorage.setItem(key, theme); } catch {}
-      update();
+
+    paint();
+    button.addEventListener('click', () => setTheme(theme === 'dark' ? 'light' : 'dark'));
+    document.addEventListener('keydown', event => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== 'd' && event.key !== 'D') return;
+      if (event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      event.preventDefault();
+      setTheme(theme === 'dark' ? 'light' : 'dark');
     });
     window.addEventListener('pageshow', event => {
-      if (event.persisted) {
-        theme = readTheme();
-        update();
-      }
+      if (!event.persisted) return;
+      theme = readTheme();
+      apply();
+      paint();
+      document.dispatchEvent(new Event('atlas-theme-change'));
     });
-  });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootTheme);
+  else bootTheme();
 })();

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How Earth Trend Atlas projects each place to 2100: damped trend, a prediction interval that widens with lead time, and hindcast error out to 75 years.">
+<meta name="theme-color" content="#f2f0e9">
+<title>Projections | Earth Trend Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script>
+<script src="../theme.js?v=2"></script>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main class="methods-page">
+  <nav class="methods-nav" aria-label="Page navigation">
+    <a class="utility" href="../"><span aria-hidden="true">←</span> Back to atlas</a>
+    <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
+  </nav>
+  <article class="methods">
+    <h1>Projections</h1>
+
+    <section>
+      <h2>What the violet years mean</h2>
+      <p>After the last measured year, the timeline continues to 2100 in violet. Those values are statistical extrapolations from each grid cell’s own recent record. They are not climate-model output: they do not know emissions, physics, or hard limits (for example sea ice reaching zero).</p>
+      <p>Each cell and layer is projected on its own from the most recent complete 30-year window. Monthly and seasonal maps repeat the same construction for that month or season. Cells missing any year in that window stay gray. The 30-year trend map has no projected years.</p>
+    </section>
+
+    <section>
+      <h2>Trend fit</h2>
+      <p>Write the window values as \(y_i\) for \(i = 0,\ldots,29\), centered time \(x_i = i - \bar{x}\) with \(\bar{x} = 14.5\), and window mean \(\bar{y}\). The ordinary least-squares slope is</p>
+      $$
+      b = \frac{\sum_{i=0}^{29} x_i\,(y_i - \bar{y})}{\sum_{i=0}^{29} x_i^2},\qquad
+      \sum_{i=0}^{29} x_i^2 = \frac{30(30^2-1)}{12} = 2247.5.
+      $$
+      <p>Residual standard deviation (28 degrees of freedom) and the slope’s \(t\) statistic are</p>
+      $$
+      s = \sqrt{\frac{1}{28}\sum_{i=0}^{29}\bigl(y_i - \bar{y} - b x_i\bigr)^2},\qquad
+      t = \frac{b}{s\big/\sqrt{\sum x_i^2}}.
+      $$
+    </section>
+
+    <section>
+      <h2>Damped central estimate</h2>
+      <p>Weak trends relative to year-to-year noise should not be projected at full strength. The atlas uses the James–Stein-style weight</p>
+      $$
+      w = \begin{cases}
+      1 - \dfrac{1}{t^2} & \text{if } |t| &gt; 1,\\[0.6em]
+      0 & \text{otherwise.}
+      \end{cases}
+      $$
+      <p>A step \(h\) years after the window midpoint (\(h = 14.5 + k + 1\) for the \(k\)-th future year, \(k = 0,1,\ldots\)) has central estimate</p>
+      $$
+      \hat{y}(h) = \bar{y} + w\,b\,h.
+      $$
+      <p>If \(|t|\le 1\), the projection collapses to the recent mean. Temperature layers usually keep \(w\) near 1; noisy fields often shrink toward 0.</p>
+    </section>
+
+    <section>
+      <h2>95% range</h2>
+      <p>The location chart shows a classical Student-\(t\) prediction interval for one future observation, widened by a factor \(c_k\) that grows with the lead time:</p>
+      $$
+      \hat{y}(h) \;\pm\; c_k\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
+      \qquad c_k = \min\bigl(2,\; 1.25 + 0.03\,k\bigr),
+      \qquad t_{0.975,\,28} \approx 2.048,
+      $$
+      <p>where \(k = 0, 1, \ldots, 74\) counts projected years (2026 to 2100). The textbook interval assumes the 30-year line keeps going unchanged. Real trends bend: warming stalled in the mid-20th century and then sped up. The hindcast below found the textbook band held only 81–90% of later measurements beyond 25 years, so \(c_k\) was chosen to bring every lead time back to about 95%. It still omits structural breaks larger than any seen in the record, and dataset inhomogeneity.</p>
+    </section>
+
+    <section>
+      <h2>One possible year on the map</h2>
+      <p>Real years do not sit on a line. For calendar year \(Y\), the map adds the residual of one past window year</p>
+      $$
+      j = \bigl(Y\cdot 2654435761\bigr) \bmod 30,\qquad
+      \tilde{y}(h) = \hat{y}(h) + \bigl(y_j - \bar{y} - b x_j\bigr).
+      $$
+      <p>The same \(j\) is used for every cell in that year, so spatial warm/cool patterns stay coherent. That map field is one plausible year under the fitted noise, not a forecast of that exact year. The side panel’s central value and range use \(\hat{y}(h)\), not \(\tilde{y}(h)\).</p>
+    </section>
+
+    <section>
+      <h2>Hindcast check, out to 75 years</h2>
+      <p>A projection to 2100 reaches 75 years past the data, so it was tested at that distance. The method was started from many past years, given only the 30 years before each one, and scored against what was later measured. Temperature and sea surface temperature have records long enough to start in 1930, 1940, 1950, 1960, 1970, 1980, 1990 and 2000 and check up to 75 years ahead. The reanalysis layers start in 1977, 1987 and 2000 and can be checked up to 48 years ahead. Precipitation and sea ice records allow one short test each.</p>
+      <p>“Miss” is the median absolute gap between \(\hat{y}\) and the measured value across all cells and starting years. “No change” is the miss from holding each cell at its 30-year mean. Bold marks the smaller miss. “Inside” is the share of measurements that fell inside the 95% range.</p>
+      <div class="source-table-wrap">
+        <table class="source-table hindcast">
+          <thead>
+            <tr><th scope="col" rowspan="2">Layer</th><th scope="col" rowspan="2">Starting years</th><th scope="colgroup" colspan="3">1–25 years ahead</th><th scope="colgroup" colspan="3">26–50 years ahead</th><th scope="colgroup" colspan="3">51–75 years ahead</th></tr>
+            <tr><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th></tr>
+          </thead>
+          <tbody>
+<tr><th scope="row">Surface temperature anomaly (°C)</th><td>8</td><td class="better">0.38</td><td>0.40</td><td>98%</td><td>0.60</td><td class="better">0.56</td><td>97%</td><td class="better">0.78</td><td>0.79</td><td>98%</td></tr>
+<tr><th scope="row">Precipitation (mm/day)</th><td>1</td><td class="better">0.21</td><td>0.21</td><td>98%</td><td colspan="3" class="na">not enough record</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea surface temperature (°C)</th><td>8</td><td class="better">0.29</td><td>0.30</td><td>97%</td><td>0.47</td><td class="better">0.44</td><td>96%</td><td class="better">0.62</td><td>0.64</td><td>95%</td></tr>
+<tr><th scope="row">Atmospheric water vapor (kg/m²)</th><td>3</td><td>0.58</td><td class="better">0.51</td><td>97%</td><td>1.16</td><td class="better">0.63</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea level air pressure (hPa)</th><td>3</td><td>0.90</td><td class="better">0.84</td><td>98%</td><td>1.21</td><td class="better">0.96</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Wind speed at 10 m (m/s)</th><td>3</td><td>0.25</td><td class="better">0.24</td><td>97%</td><td>0.36</td><td class="better">0.30</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">East–west wind at 10 m (m/s)</th><td>3</td><td>0.39</td><td class="better">0.36</td><td>97%</td><td>0.56</td><td class="better">0.41</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">North–south wind at 10 m (m/s)</th><td>3</td><td>0.34</td><td class="better">0.31</td><td>97%</td><td>0.49</td><td class="better">0.35</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Total cloud cover (pp)</th><td>3</td><td>2.62</td><td class="better">2.47</td><td>97%</td><td>4.09</td><td class="better">3.12</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Air temperature at 2 m (°C)</th><td>3</td><td class="better">0.50</td><td>0.52</td><td>97%</td><td>0.89</td><td class="better">0.77</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Surface skin temperature (°C)</th><td>3</td><td class="better">0.51</td><td>0.51</td><td>96%</td><td>0.87</td><td class="better">0.73</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Topsoil moisture (pp)</th><td>3</td><td>0.31</td><td class="better">0.29</td><td>95%</td><td>0.53</td><td class="better">0.35</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Topsoil temperature (°C)</th><td>3</td><td class="better">0.36</td><td>0.38</td><td>97%</td><td>0.78</td><td class="better">0.60</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea ice concentration (pp)</th><td>1</td><td class="better">3.72</td><td>3.76</td><td>94%</td><td colspan="3" class="na">not enough record</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Incoming sunlight at the surface (W/m²)</th><td>3</td><td>3.87</td><td class="better">3.65</td><td>96%</td><td>6.72</td><td class="better">4.56</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Latent heat flux at the surface (W/m²)</th><td>3</td><td>3.97</td><td class="better">3.50</td><td>95%</td><td>6.26</td><td class="better">4.13</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sensible heat flux at the surface (W/m²)</th><td>3</td><td>3.35</td><td class="better">3.09</td><td>95%</td><td>5.44</td><td class="better">4.30</td><td>93%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Outgoing longwave radiation (W/m²)</th><td>3</td><td class="better">3.24</td><td>3.65</td><td>97%</td><td>5.47</td><td class="better">5.05</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two things stand out. First, the range is reliable: across every layer and lead time, 93–98% of measurements fell inside it. Second, the central line is not much better than assuming no change, even for temperature, once results from all starting years are pooled. A 30-year line started in 1940 caught early-century warming and then overshot through the mid-century pause. One started in 1970 caught the start of rapid warming and did well. The line is only as good as the assumption that the next decades resemble the last three.</p>
+      <p>From the most recent starting point the trend did help. Fit to 1971–2000, surface temperature missed 2016–2025 by 0.52 °C against 0.77 °C for no change. Recent warming has been steady, which favours the line, but nothing in the data guarantees that continues to 2100.</p>
+      <p>Read violet years past about 2050 mainly through their range. By 2100 the 95% range for surface temperature is about ±3.6 °C in a typical grid cell (±1.9 °C to ±7.5 °C for 80% of cells). For the global average shown on the front page it is about ±0.9 °C, because averaging the whole planet cancels most of the local year-to-year noise. That width is the honest answer to what 30 years of data can say about 75 years later.</p>
+    </section>
+
+    <section>
+      <h2>Limits</h2>
+      <p>Even 8 starting years is thin evidence for 75-year leads, and those tests saw only one century of climate. Projections do not respect physical limits: a sea ice or soil moisture anomaly can project below what is physically possible. Reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows more than it did in the test period, \(\hat{y}\) will miss by more than the range allows. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
+    </section>
+  </article>
+</main>
+</body>
+</html>

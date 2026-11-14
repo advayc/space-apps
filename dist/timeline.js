@@ -14,15 +14,30 @@ export function dateLabel(year, period) {
   return prefix ? prefix + ' ' + year : String(year);
 }
 
+// The timeline continues past the last observation up to this year with
+// projected entries (flagged `projected`), except in the 30-year trend view.
+export const HORIZON = 2100;
+
+export function futureYears(years) {
+  const last = years.at(-1);
+  if (years.length < WINDOW) return [];
+  return Array.from({length: Math.max(0, HORIZON - last)}, (_, i) => last + 1 + i);
+}
+
 export function makeTimeline(dataset, mode) {
   const periods = mode === 'monthly' ? months : mode === 'seasonal' ? seasons : null;
   if (!periods) {
-    const years = mode === 'trend' ? dataset.years.slice(WINDOW - 1) : dataset.years;
-    return years.map(year => ({ year, period: 'annual', order: year }));
+    if (mode === 'trend') return dataset.years.slice(WINDOW - 1).map(year => ({ year, period: 'annual', order: year }));
+    return [
+      ...dataset.years.map(year => ({ year, period: 'annual', order: year })),
+      ...futureYears(dataset.years).map(year => ({ year, period: 'annual', order: year, projected: true })),
+    ];
   }
-  return [...periods.keys()].flatMap((period, index) =>
-    dataset.periods[period].years.map(year => ({ year, period, order: year * periods.size + index }))
-  ).sort((a, b) => a.order - b.order);
+  return [...periods.keys()].flatMap((period, index) => {
+    const years = dataset.periods[period].years;
+    const entry = (year, projected) => ({ year, period, order: year * periods.size + index, projected });
+    return [...years.map(year => entry(year, false)), ...futureYears(years).map(year => entry(year, true))];
+  }).sort((a, b) => a.order - b.order);
 }
 
 export function nearestIndex(timeline, mode, year, period) {
