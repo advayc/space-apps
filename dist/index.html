@@ -59,58 +59,12 @@
 </header>
 <main>
   <section class="how" id="how" aria-labelledby="how-title">
-    <h2 id="how-title">Four moves, about a minute</h2>
-    <ol class="steps">
-      <li class="step-card">
-        <div class="vignette" aria-hidden="true">
-          <div class="v-chips"><span class="on">Temperature</span><span>Rain and snow</span><span>Sea ice</span><span>Wind</span><span>Clouds</span><span>Soil</span></div>
-        </div>
-        <h3>Choose what to measure</h3>
-        <p>Eighteen layers, from temperature to sea ice.</p>
-        <button class="try" type="button" data-try="layer">Show me the menu</button>
-      </li>
-      <li class="step-card">
-        <div class="vignette" aria-hidden="true">
-          <svg viewBox="0 0 200 96" class="v-map">
-            <g id="v-cells"></g>
-            <circle cx="126" cy="42" r="9" class="v-pin-ring"/><circle cx="126" cy="42" r="3.2" class="v-pin"/>
-          </svg>
-        </div>
-        <h3>Pick a place</h3>
-        <p>Search a city, or click anywhere on the map.</p>
-        <button class="try" type="button" data-try="place-query">Show me the search</button>
-      </li>
-      <li class="step-card">
-        <div class="vignette" aria-hidden="true">
-          <div class="v-time">
-            <b>▶</b>
-            <div class="v-track"><i class="v-obs"></i><i class="v-proj"></i><u></u></div>
-            <div class="v-years"><span>1880</span><span>today</span><span>2050</span></div>
-          </div>
-        </div>
-        <h3>Move through time</h3>
-        <p>Drag the slider back to 1880, or forward into the violet projected years.</p>
-        <button class="try" type="button" data-try="year">Show me the timeline</button>
-      </li>
-      <li class="step-card">
-        <div class="vignette" aria-hidden="true">
-          <svg viewBox="0 0 200 96" class="v-chart">
-            <polyline class="v-line" points="6,70 18,74 30,62 42,68 54,58 66,63 78,50 90,56 102,44 114,48 126,36 138,40"/>
-            <line class="v-fit" x1="54" y1="62" x2="138" y2="36"/>
-            <line class="v-future" x1="138" y1="36" x2="194" y2="19"/>
-          </svg>
-          <span class="v-tag">+0.4 °C per decade</span>
-        </div>
-        <h3>Read the answer</h3>
-        <p>How far from normal, how fast it is changing, and whether the trend is solid.</p>
-        <button class="try" type="button" data-try="result">Show me the panel</button>
-      </li>
-    </ol>
+    <h2 id="how-title">How to read the map</h2>
     <dl class="glossary">
       <div><dt><i class="sw sw-ramp"></i>Colors</dt><dd>Difference from that place’s usual value, never the raw reading. Cooler or drier on one side, warmer or wetter on the other.</dd></div>
       <div><dt><i class="sw sw-fit"></i>Trend line</dt><dd>The straight line that best fits 30 years, given as change per decade.</dd></div>
       <div><dt><i class="sw sw-sig"></i>Significant</dt><dd>A flat line would be unlikely for this spot. It does not prove a cause.</dd></div>
-      <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>The recent trend carried to 2050, with a range showing how far off it could be. Not a climate model forecast. <a href="projections/">Read how it works</a>.</dd></div>
+      <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>The recent trend carried to 2050, with a range showing how far off it could be. Not a climate model forecast. <a href="projections/">How projections work</a>.</dd></div>
     </dl>
   </section>
   <div class="workspace" id="atlas">

@@ -1,5 +1,4 @@
-// Landing page: the global temperature record in the hero, the hero search,
-// and the "show me" buttons in the walkthrough. Independent of the atlas load.
+// Landing page: the global temperature record in the hero, and the hero search.
 import { forecast } from './statistics.js';
 import { HORIZON } from './timeline.js';
 
@@ -89,24 +88,7 @@ function drawRecord() {
   });
 }
 
-// A small patch of grid cells for the "pick a place" vignette.
-function drawCells() {
-  const group = $('v-cells');
-  const cols = 10, rows = 5, w = 20, h = 19.2;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const rect = document.createElementNS(SVG, 'rect');
-      const warmth = .52 + .4 * Math.sin(c * .7 + r * 1.3) * Math.cos(r * .9 - c * .35) + (r < 2 ? .14 : 0);
-      rect.setAttribute('x', c * w); rect.setAttribute('y', r * h);
-      rect.setAttribute('width', w - .6); rect.setAttribute('height', h - .6);
-      rect.setAttribute('fill', ramp(warmth));
-      group.append(rect);
-    }
-  }
-}
-
 drawRecord();
-drawCells();
 document.addEventListener('atlas-theme-change', drawRecord);
 
 fetch('assets/cities.json').then(response => response.json()).then(places => {
@@ -117,16 +99,3 @@ $('hero-search').addEventListener('submit', event => {
   event.preventDefault();
   document.dispatchEvent(new CustomEvent('atlas-find-place', {detail: $('hero-query').value}));
 });
-
-for (const button of document.querySelectorAll('[data-try]')) {
-  button.addEventListener('click', () => {
-    const target = $(button.dataset.try);
-    const frame = target.closest('.layer-select, .place-combobox, .timeline, .result') ?? target;
-    frame.scrollIntoView({block: 'center'});
-    if (target.matches('select, input')) target.focus({preventScroll: true});
-    frame.classList.remove('spot');
-    void frame.offsetWidth;
-    frame.classList.add('spot');
-    setTimeout(() => frame.classList.remove('spot'), 2400);
-  });
-}

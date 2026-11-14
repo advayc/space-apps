@@ -3,9 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="How Earth Trend Atlas projects each place to 2050, and how far off those projections have been when tested.">
+<meta name="description" content="How Earth Trend Atlas projects each place to 2050: damped trend, prediction interval, and hindcast error.">
 <meta name="theme-color" content="#f2f0e9">
 <title>Projections | Earth Trend Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false})"></script>
 <script src="../theme.js"></script>
 <link rel="stylesheet" href="../styles.css">
 </head>
@@ -16,21 +23,67 @@
     <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
   </nav>
   <article class="methods">
-    <h1>Projections and their error</h1>
+    <h1>Projections</h1>
+
     <section>
-      <h2>What a projected year is</h2>
-      <p>Years after the latest data are shown in violet, up to 2050. They are estimates made from each place’s own record. They are not output from a climate model, and they know nothing about emissions, physics, or limits such as sea ice reaching zero.</p>
-      <p>Every grid cell of every layer is projected separately, in three parts:</p>
-      <ol class="plain">
-        <li><b>The recent trend, trusted only as far as it has earned.</b> The atlas fits a straight line to the last 30 years. A strong, steady trend is carried forward almost in full. A trend that is small next to the year-to-year scatter is reduced, and one that is weaker than its own noise is dropped, so the place is projected to stay near its recent average.</li>
-        <li><b>Year-to-year swings.</b> Real years do not sit on a line. Each projected year borrows the departures from trend of one real year in the last 30, using the same year for the whole map, so warm and cool patches keep realistic shapes. This is what the map shows, and it is one possible year, not a prediction of that exact year.</li>
-        <li><b>A range.</b> The location chart and side panel show the central estimate with a 95% range around it. The range grows the further ahead you look.</li>
-      </ol>
+      <h2>What the violet years mean</h2>
+      <p>After the last measured year, the timeline continues to 2050 in violet. Those values are statistical extrapolations from each grid cell’s own recent record. They are not climate-model output: they do not know emissions, physics, or hard limits (for example sea ice reaching zero).</p>
+      <p>Each cell and layer is projected on its own from the most recent complete 30-year window. Monthly and seasonal maps repeat the same construction for that month or season. Cells missing any year in that window stay gray. The 30-year trend map has no projected years.</p>
     </section>
+
     <section>
-      <h2>How far off it has been</h2>
-      <p>To measure the error, the method was run on the past. For each layer it was given 30 years of data ending 25 years before the latest year, then asked to project the years that followed, which could be checked against what was measured. Shorter records leave fewer years to check.</p>
-      <p>“Typical miss” is the median gap between the central estimate and the measured value across all grid cells. The no-change column is the miss from assuming each place simply stays at its 30-year average. The lower of the two is in bold.</p>
+      <h2>Trend fit</h2>
+      <p>Write the window values as $y_i$ for $i = 0,\ldots,29$, centered time $x_i = i - \bar{x}$ with $\bar{x} = 14.5$, and window mean $\bar{y}$. The ordinary least-squares slope is</p>
+      $$
+      b = \frac{\sum_{i=0}^{29} x_i\,(y_i - \bar{y})}{\sum_{i=0}^{29} x_i^2},\qquad
+      \sum_{i=0}^{29} x_i^2 = \frac{30(30^2-1)}{12} = 2247.5.
+      $$
+      <p>Residual standard deviation (28 degrees of freedom) and the slope’s $t$ statistic are</p>
+      $$
+      s = \sqrt{\frac{1}{28}\sum_{i=0}^{29}\bigl(y_i - \bar{y} - b x_i\bigr)^2},\qquad
+      t = \frac{b}{s\big/\sqrt{\sum x_i^2}}.
+      $$
+    </section>
+
+    <section>
+      <h2>Damped central estimate</h2>
+      <p>Weak trends relative to year-to-year noise should not be projected at full strength. The atlas uses the James–Stein-style weight</p>
+      $$
+      w = \begin{cases}
+      1 - \dfrac{1}{t^2} & \text{if } |t| &gt; 1,\\[0.6em]
+      0 & \text{otherwise.}
+      \end{cases}
+      $$
+      <p>A step $h$ years after the window midpoint ($h = 14.5 + k + 1$ for the $k$-th future year, $k = 0,1,\ldots$) has central estimate</p>
+      $$
+      \hat{y}(h) = \bar{y} + w\,b\,h.
+      $$
+      <p>If $|t|\le 1$, the projection collapses to the recent mean. Temperature layers usually keep $w$ near 1; noisy fields often shrink toward 0.</p>
+    </section>
+
+    <section>
+      <h2>95% range</h2>
+      <p>The location chart shows a classical Student-$t$ prediction interval for one future observation, widened by a fixed factor $c = 1.4$ after a hindcast found the textbook band too narrow:</p>
+      $$
+      \hat{y}(h) \;\pm\; c\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
+      \qquad t_{0.975,\,28} \approx 2.048.
+      $$
+      <p>The band grows with lead time $h$. It still omits structural breaks, changing slopes, and dataset inhomogeneity, so treat it as a lower bound on real uncertainty.</p>
+    </section>
+
+    <section>
+      <h2>One possible year on the map</h2>
+      <p>Real years do not sit on a line. For calendar year $Y$, the map adds the residual of one past window year</p>
+      $$
+      j = \bigl(Y\cdot 2654435761\bigr) \bmod 30,\qquad
+      \tilde{y}(h) = \hat{y}(h) + \bigl(y_j - \bar{y} - b x_j\bigr).
+      $$
+      <p>The same $j$ is used for every cell in that year, so spatial warm/cool patterns stay coherent. That map field is one plausible year under the fitted noise, not a forecast of that exact year. The side panel’s central value and range use $\hat{y}(h)$, not $\tilde{y}(h)$.</p>
+    </section>
+
+    <section>
+      <h2>Hindcast check</h2>
+      <p>To measure error, each layer was fit on 30 years ending 25 years before the latest observed year, then projected forward and compared with measurements. “Typical miss” is the median absolute gap between $\hat{y}$ and the measured value across cells. The no-change column is the miss from holding each cell at its 30-year mean. Bold marks the better method.</p>
       <div class="source-table-wrap">
         <table class="source-table">
           <thead><tr><th scope="col">Layer</th><th scope="col">Fitted to</th><th scope="col">Checked against</th><th scope="col">Typical miss, first 10 years</th><th scope="col">Typical miss, last 10 years</th><th scope="col">No-change guess, last 10 years</th><th scope="col">Measured values inside the 95% range</th></tr></thead>
@@ -56,22 +109,12 @@
           </tbody>
         </table>
       </div>
-      <p>What this shows:</p>
-      <ol class="plain">
-        <li><b>Temperature layers project usefully.</b> For surface, air, sea surface, skin and topsoil temperature, the projection clearly beats assuming no change. A typical miss 16 to 25 years out is about 0.5 °C for surface temperature.</li>
-        <li><b>Pressure, wind, cloud, moisture, sea ice and energy layers do not.</b> There the no-change guess did as well or better, because their 30-year trends are mostly noise. Treat projected years in those layers as illustrations of normal variability, not as a direction of travel.</li>
-        <li><b>The range is honest on average.</b> The textbook 95% interval contained only about 87% of measured values in this test, so the atlas widens it by a factor of 1.4. With that, 93% to 98% of measured values fell inside, depending on the layer.</li>
-      </ol>
+      <p>Temperature layers beat a no-change guess (roughly $0.5\,^\circ\mathrm{C}$ typical miss 16–25 years out for surface temperature). Pressure, wind, cloud, moisture, sea ice, and energy layers usually do not—treat their violet years as variability sketches, not a direction of travel. Before widening, the textbook 95% interval held only about 87% of measured values; with $c = 1.4$ it held 93–98% by layer.</p>
     </section>
-    <section>
-      <h2>The calculation</h2>
-      <p>For a cell with values in the last 30 years, let <i>b</i> be the least squares slope, <i>m</i> the mean, and <i>s</i> the residual standard deviation (28 degrees of freedom). The slope’s <i>t</i> statistic is <i>b</i> divided by its standard error. The trend weight is <i>w</i> = 1 − 1/<i>t</i>² when |<i>t</i>| is above 1, and 0 otherwise. The central estimate <i>h</i> years after the window’s midpoint is <i>m</i> + <i>w</i>·<i>b</i>·<i>h</i>.</p>
-      <p>The 95% range is the central estimate ± 1.4 × 2.048 × <i>s</i> × √(1 + 1/30 + <i>h</i>²/Σ<i>x</i>²), the Student <i>t</i> prediction interval for one future value, widened by 1.4. The simulated year adds the residual of one window year, chosen by a fixed rule from the calendar year so every visitor sees the same map. Monthly and seasonal views repeat all of this for that month or season. Cells without 30 complete recent years stay gray. The 30-year trend view has no projected years.</p>
-    </section>
+
     <section>
       <h2>Limits</h2>
-      <p>One test period is thin evidence. The check above covers a single stretch of history per layer, and the reanalysis layers contain changes in observing systems that can look like trends. A straight line also cannot bend: if warming speeds up or slows down, the projection will miss it, and the range does not include that possibility. For decisions that matter, use published climate model projections such as those assessed by the IPCC.</p>
-      <p>The numbers in the table were calculated from the atlas’s own grids in November 2026 and will shift a little when the data are updated.</p>
+      <p>One hindcast window is thin evidence, and reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows, $\hat{y}$ will miss, and the interval does not include that possibility. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
     </section>
   </article>
 </main>

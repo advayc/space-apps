@@ -47,4 +47,4 @@ The first run links this folder to `advayc/space-apps`; every run commits and pu
 
 ## Data
 
-Main layers include NASA GISTEMP temperature, GPCP precipitation, NOAA ERSST sea surface temperature, NCEP/NCAR reanalysis fields, and OISST sea ice. Full citations and methods are on the [Data & methods](dist/data-and-methods/) page.
+Main layers include NASA GISTEMP temperature, GPCP precipitation, NOAA ERSST sea surface temperature, NCEP/NCAR reanalysis fields, and OISST sea ice. Full citations and methods are on the [Data & methods](dist/data-and-methods/) page. Projection formulas and hindcast checks are on the [Projections](dist/projections/) page.

@@ -1285,16 +1285,32 @@ function trendSummary() {
   };
 }
 
+// Spreadsheet apps often open CSVs as Windows-1252. Fancy Unicode (° en-dash)
+// then becomes mojibake like ¬∞ or ‚Äì. Keep the file UTF-8 with a BOM, and
+// also flatten those characters to plain ASCII so the cells stay readable.
+function csvText(value) {
+  if (value == null) return '';
+  const raw = typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(5) : String(value);
+  return raw
+    .replaceAll('\u00b0C', 'degC')
+    .replaceAll('\u00b0', 'deg')
+    .replaceAll(/[\u2012\u2013\u2014\u2212]/g, '-')
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .replaceAll(/[\u201c\u201d]/g, '"')
+    .replaceAll(/[\u00a0\u2009\u202f]/g, ' ')
+    .replaceAll('\u00b7', ' | ');
+}
+
 $('csv').addEventListener('click', () => {
   if (!active || !chartData) return;
   const rows = exportRows();
   const columns = Object.keys(rows[0]);
-  const text = value => value == null ? '' : typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(5) : String(value);
   const quote = value => /[",\n]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
   const extra = {baseline: active.reference, product: active.product, source: active.source};
   const lines = [[...columns, ...Object.keys(extra)].join(','),
-    ...rows.map(row => [...columns.map(key => text(row[key])), ...Object.values(extra)].map(quote).join(','))];
-  saveBlob(new Blob([lines.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'}), exportName('series', 'csv'));
+    ...rows.map(row => [...columns.map(key => csvText(row[key])), ...Object.values(extra).map(csvText)].map(quote).join(','))];
+  // BOM helps Excel detect UTF-8; ASCII flattening covers other importers.
+  saveBlob(new Blob(['\uFEFF' + lines.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'}), exportName('series', 'csv'));
 });
 
 $('trend-json').addEventListener('click', () => {
