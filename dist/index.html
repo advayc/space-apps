@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Explore decades of surface temperature and precipitation change on an interactive globe.">
+<meta name="theme-color" content="#f4f3ed">
+<title>Earth Trend Atlas</title>
+<link rel="stylesheet" href="styles.css">
+<script defer src="assets/d3-array.min.js"></script>
+<script defer src="assets/d3-geo.min.js"></script>
+<script defer src="assets/topojson.min.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="identity"><span class="brand-icon" aria-hidden="true">◎</span><div>Earth Trend Atlas <span> / </span><small>SPACE APPS PROJECT</small></div></div>
+  <button class="method-link" id="open-method">Data &amp; methods <span aria-hidden="true">↗</span></button>
+</header>
+<main>
+  <section class="intro" aria-label="Introduction">
+    <div><div class="eyebrow"><span class="status-dot"></span> EARTH SYSTEM TREND DETECTIVE</div><h1>A planet in <em>change.</em></h1></div>
+    <p>Explore how temperature and rainfall have changed across the world. Choose a year, then pick a place to see its trend.</p>
+  </section>
+  <div class="workspace">
+    <section class="explore" aria-label="Climate map">
+      <div class="toolbar">
+        <div class="segments layer-select" role="group" aria-label="Climate variable">
+          <button data-layer="temperature" aria-pressed="true"><span aria-hidden="true">◒</span> Temperature</button>
+          <button data-layer="precipitation" aria-pressed="false"><span aria-hidden="true">◈</span> Precipitation</button>
+        </div>
+        <div class="segments view-select" role="group" aria-label="Projection">
+          <button data-view="globe" aria-pressed="true">Globe</button><button data-view="map" aria-pressed="false">Flat map</button>
+        </div>
+      </div>
+      <div class="map" id="map">
+        <canvas id="earth" tabindex="0" aria-label="Interactive climate globe. Drag to rotate, or use arrow keys. Click to select a grid cell. The location menu also offers keyboard selection."></canvas>
+        <div class="map-meta"><span id="mode-label">ANNUAL ANOMALY</span><strong id="map-year">2025</strong><span id="map-source">NASA GISS / GISTEMP v4</span></div>
+        <label class="mode"><span class="sr-only">Map layer display</span><select id="mode"><option value="annual">Annual anomaly</option><option value="trend">30-year trend</option></select></label>
+        <div class="map-legend"><div id="legend-title">Surface temperature anomaly (°C)</div><div class="ramp" id="ramp"></div><div class="ticks"><span id="legend-min"></span><span>0</span><span id="legend-max"></span></div><div class="nodata"><i></i> No data</div></div>
+        <button class="recenter" id="recenter" title="Center on selected location" aria-label="Center on selected location">⌖</button>
+        <div class="map-hint" id="map-hint">Drag to rotate · Click to inspect</div>
+        <div id="map-status" class="map-status" role="status">Loading climate data…</div>
+        <div id="tooltip" class="tooltip" hidden></div>
+      </div>
+      <div class="timeline">
+        <button class="play" id="play" aria-label="Play timeline">▶</button>
+        <div class="timeline-track">
+          <div class="time-head"><label for="year">TIMELINE</label><output id="year-label" for="year">2025</output></div>
+          <input type="range" id="year" min="1880" max="2025" value="2025" aria-label="Timeline year">
+          <div class="time-ticks" id="time-ticks"></div>
+        </div>
+        <div class="step"><button id="previous" aria-label="Previous year">‹</button><button id="next" aria-label="Next year">›</button></div>
+      </div>
+    </section>
+    <aside class="inspector" aria-label="Location analysis">
+      <div class="inspector-top"><span class="eyebrow">LOCATION ANALYSIS</span><span id="resolution">2° GRID</span></div>
+      <div class="location"><h2 id="place-name">Canadian Arctic</h2><div id="coordinates">74.00° N · 95.00° W</div></div>
+      <label class="sr-only" for="place">Jump to a location</label>
+      <select id="place">
+        <option value="arctic">Canadian Arctic</option>
+        <option value="toronto">Toronto</option>
+        <option value="pacific">Equatorial Pacific</option>
+        <option value="amazon">Central Amazon</option>
+        <option value="sahel">West African Sahel</option>
+        <option value="india">Central India</option>
+        <option value="antarctica">East Antarctica</option>
+        <option value="custom" disabled>Selected grid cell</option>
+      </select>
+      <div class="numbers">
+        <div><span id="value-label">2025 ANOMALY</span><strong id="value">—</strong></div>
+        <div><span>30-YEAR TREND</span><strong id="slope">—</strong></div>
+      </div>
+      <div class="chart-header"><h3>Annual anomalies</h3><span id="chart-period"></span></div>
+      <canvas id="chart" role="img" aria-label="Historical anomalies for the selected cell"></canvas>
+      <div class="result" id="result">
+        <span id="inference" class="eyebrow">TREND TEST</span>
+        <p id="interval">Select a location to inspect its trend.</p>
+      </div>
+      <button id="csv" class="download">Download location CSV <span aria-hidden="true">↓</span></button>
+    </aside>
+  </div>
+  <footer><span>AN INDEPENDENT NASA SPACE APPS CHALLENGE PROJECT</span><span>NASA GISS <b>·</b> NOAA PSL <b>·</b> NATURAL EARTH</span></footer>
+</main>
+<dialog id="methods">
+  <div class="dialog-top"><h2>Data &amp; methods</h2><form method="dialog"><button aria-label="Close data and methods">×</button></form></div>
+  <h3>Where the data come from</h3>
+  <p><a href="https://data.giss.nasa.gov/gistemp/data_v4.html" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a> combines land and ocean observations on a 2° grid with 1,200 km smoothing. Temperature anomalies use NASA’s 1951–1980 baseline. Grid values describe a broad area, so a city label is a shortcut to its grid cell.</p>
+  <p><a href="https://psl.noaa.gov/data/gridded/data.gpcp.html" target="_blank" rel="noopener">GPCP v2.3</a> satellite and gauge precipitation is provided by NOAA PSL on a 2.5° grid. Each cell’s precipitation anomaly is the change in mean daily precipitation relative to its own 1991–2020 average.</p>
+  <h3>From months to years</h3>
+  <p>Each annual value is a mean of 12 monthly values weighted by calendar days. A cell-year with a missing month is shown in gray. The color scale stays fixed while the timeline moves. Values outside the legend endpoints use the endpoint colors.</p>
+  <h3>How trends are tested</h3>
+  <p>The trend is the least squares slope across 30 consecutive annual values, expressed per decade. The confidence interval and two-sided p-value use a Newey–West standard error with three annual lags and an approximate normal reference distribution. The map colors represent slope magnitude. Each significance test applies to a single cell, without adjustment for multiple comparisons. The interval describes regression uncertainty and excludes uncertainty in the input dataset.</p>
+  <p>Coastlines and borders from <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">Natural Earth</a>. This independent project does not imply NASA endorsement.</p>
+</dialog>
+</body>
+</html>
