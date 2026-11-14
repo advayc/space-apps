@@ -1,4 +1,4 @@
-"""Build reproducible annual grids from the agency's monthly NetCDF records."""
+"""Build anomaly series and historical baseline grids from monthly NetCDF records."""
 from argparse import ArgumentParser
 from calendar import monthrange
 import gzip
@@ -158,8 +158,9 @@ def grids(path, key, meta):
             raise ValueError(f"{path}: unexpected grid coordinates")
 
         field = source[meta["variable"]]
-        if field.dimensions != ("time", "lat", "lon") or field.units not in meta["inputUnits"]:
-            raise ValueError(f"{path}: unexpected field metadata {field.dimensions}, {field.units}")
+        field_units = field.units
+        if field.dimensions != ("time", "lat", "lon") or field_units not in meta["inputUnits"]:
+            raise ValueError(f"{path}: unexpected field metadata {field.dimensions}, {field_units}")
         monthly = {}
         for year, months in sorted(months_by_year.items()):
             order = sorted(months)
@@ -176,17 +177,21 @@ def grids(path, key, meta):
             if all(date in monthly for date in dates):
                 weights = [monthrange(y, m)[1] for y, m in dates]
                 result[year] = np.average([monthly[date] for date in dates], weights=weights, axis=0)
+        reference = None
         if key != "temperature":
             # Use the same period in every baseline year, including December of
             # the prior year for winters labeled by their January/February year.
             reference = np.mean([result[y] for y in range(1991, 2021)], axis=0)
             result = {year: values - reference for year, values in result.items()}
+            # Absolute temperatures use °C in the atlas, even when the source uses K.
+            if field_units == "degK":
+                reference = reference - 273.15
         years = list(range(min(result), max(result) + 1))
         empty = np.full((len(ys), len(xs)), np.nan)
         data = np.asarray([result.get(year, empty) for year in years], dtype="<f4")
         if not np.isfinite(data).any():
             raise ValueError(f"{path}: no finite data for {period}")
-        return years, data
+        return years, data, reference
 
     yield "annual", step, aggregate([(0, m) for m in range(1, 13)])
     for month in range(1, 13):
@@ -205,40 +210,67 @@ def write_grid(output, name, years, data, *, compact=False):
         packed[valid] = np.clip(np.rint(data[valid] / precision), -32767, 32767)
         entry["precision"] = precision
         data = packed
+    return {**entry, "file": write_asset(output, name, data)}
+
+
+def write_asset(output, name, data):
     payload = gzip.compress(data.tobytes(), compresslevel=9, mtime=0)
     filename = f"{name}-{sha256(payload).hexdigest()[:10]}.bin"
     (output / filename).write_bytes(payload)
-    return {**entry, "file": filename}
+    return filename
+
+
+def write_climatology(output, key, baselines, unit):
+    grids = np.asarray(list(baselines.values()), dtype="<f4")
+    filename = write_asset(output, f"{key}-baselines", grids)
+    return {"file": filename, "periods": list(baselines), "unit": "%" if unit == "pp" else unit}
 
 
 def main():
     parser = ArgumentParser(description=__doc__)
     for key in PRODUCTS:
-        parser.add_argument("--" + key, type=Path, required=key in {"temperature", "precipitation"})
+        parser.add_argument("--" + key, type=Path)
     parser.add_argument("--output", type=Path, default=Path(__file__).resolve().parents[1] / "dist/assets")
+    parser.add_argument("--baselines-only", action="store_true",
+                        help="Add baseline files to an existing catalog using the original source snapshots.")
     args = parser.parse_args()
+    if not args.baselines_only and (args.temperature is None or args.precipitation is None):
+        parser.error("--temperature and --precipitation are required to build anomaly series.")
     args.output.mkdir(parents=True, exist_ok=True)
-    datasets = {}
+    catalog = args.output / "catalog.json"
+    datasets = json.loads(catalog.read_text()) if args.baselines_only else {}
     for key, meta in PRODUCTS.items():
         path = getattr(args, key)
-        if path is None:
+        if path is None or (args.baselines_only and key == "temperature"):
             continue
+        source_sha = sha256(path.read_bytes()).hexdigest()
+        if args.baselines_only and datasets.get(key, {}).get("sourceSha256") != source_sha:
+            parser.error(f"{path} does not match the catalog's {key} source snapshot.")
         periods = grids(path, key, meta)
-        _, step, (years, data) = next(periods)
-        # Annual grids are packed like the sub-annual ones: about 2.5x smaller to download.
-        annual = write_grid(args.output, key, years, data, compact=True)
-        subannual = {
-            period: write_grid(args.output, f"{key}-{period}", period_years, period_data, compact=True)
-            for period, _, (period_years, period_data) in periods
-        }
+        _, step, (years, data, reference) = next(periods)
+        baselines = {} if reference is None else {"annual": reference}
+        annual = {} if args.baselines_only else write_grid(args.output, key, years, data, compact=True)
+        subannual = {}
+        for period, _, (period_years, period_data, reference) in periods:
+            if reference is not None:
+                baselines[period] = reference
+            if not args.baselines_only:
+                subannual[period] = write_grid(args.output, f"{key}-{period}", period_years, period_data, compact=True)
+        climatology = write_climatology(args.output, key, baselines, meta["unit"]) if baselines else None
+        if args.baselines_only:
+            datasets[key]["climatology"] = climatology
+            print(f"{key}: {len(baselines)} baseline grids")
+            continue
         datasets[key] = {
             **{name: value for name, value in meta.items() if name != "inputUnits"},
             **annual, "periods": subannual, "step": step,
             "height": data.shape[1], "width": data.shape[2],
-            "sourceSha256": sha256(path.read_bytes()).hexdigest(),
+            "sourceSha256": source_sha,
         }
+        if climatology is not None:
+            datasets[key]["climatology"] = climatology
         print(f"{key}: {years[0]}–{years[-1]} annual, {len(subannual)} monthly and seasonal series")
-    (args.output / "catalog.json").write_text(json.dumps(datasets, ensure_ascii=False, separators=(",", ":")))
+    catalog.write_text(json.dumps(datasets, ensure_ascii=False, separators=(",", ":")))
 
 
 if __name__ == "__main__":

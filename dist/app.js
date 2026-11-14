@@ -48,6 +48,7 @@ const DEFAULT_ROTATION = [93, -46];
 let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'map', mode = 'annual', year = 2025;
 let rotation = [...DEFAULT_ROTATION], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
+let comparison = null, choosingComparison = false, primaryQuery = '';
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let flatMap, flatZoom = 1, flatOffset = [0, 0];
@@ -56,6 +57,7 @@ let intervalAnchor = null, intervalEnd = null;
 let placeMatches = [], placeActive = -1;
 const chart = $('chart');
 const datasets = new Map();
+const baselineRequests = new Map();
 let month = '01', season = 'djf', loadVersion = 0;
 let timeline = [], timelineIndex = 0, playing = false;
 let mapHover = null;
@@ -97,6 +99,47 @@ async function fetchAsset(file) {
   if (!response.ok) throw new Error(file + ': HTTP ' + response.status);
   return response;
 }
+
+async function decodeGrid(entry, size) {
+  const response = await fetchAsset(entry.file);
+  const bytes = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  const packed = entry.precision != null;
+  if (bytes.byteLength !== size * (packed ? 2 : 4)) throw new Error('Data size mismatch');
+  if (!packed && new Uint8Array(new Uint16Array([1]).buffer)[0] === 1) return new Float32Array(bytes);
+
+  const decoded = new DataView(bytes);
+  const values = new Float32Array(size);
+  for (let i = 0; i < size; i++) {
+    if (packed) {
+      const value = decoded.getInt16(2 * i, true);
+      values[i] = value === -32768 ? NaN : value * entry.precision;
+    } else {
+      values[i] = decoded.getFloat32(4 * i, true);
+    }
+  }
+  return values;
+}
+
+async function loadBaseline(info, period) {
+  const entry = info.climatology;
+  const frame = entry?.periods.indexOf(period);
+  if (frame == null || frame < 0) return null;
+  const size = info.width * info.height;
+  let request = baselineRequests.get(entry.file);
+  if (!request) {
+    request = decodeGrid(entry, size * entry.periods.length).catch(error => {
+      if (baselineRequests.get(entry.file) === request) baselineRequests.delete(entry.file);
+      console.warn('Historical baseline could not load:', error);
+      return null;
+    });
+  }
+  baselineRequests.delete(entry.file);
+  baselineRequests.set(entry.file, request);
+  if (baselineRequests.size > 4) baselineRequests.delete(baselineRequests.keys().next().value);
+  const baselines = await request;
+  return baselines?.subarray(frame * size, (frame + 1) * size) ?? null;
+}
+
 async function loadDataset(key, period) {
   const cacheKey = key + ':' + period;
   const existing = datasets.get(cacheKey);
@@ -108,28 +151,9 @@ async function loadDataset(key, period) {
   const request = (async () => {
     const info = catalog[key];
     const entry = period === 'annual' ? info : info.periods[period];
-    const response = await fetchAsset(entry.file);
-    const bytes = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-    const expected = info.width * info.height * entry.years.length;
-    const packed = entry.precision != null;
-    if (bytes.byteLength !== (packed ? 2 : 4) * expected) throw new Error('Data size mismatch');
-
-    const decoded = new DataView(bytes);
-    let values;
-    if (packed) {
-      values = new Float32Array(expected);
-      for (let i = 0; i < expected; i++) {
-        const value = decoded.getInt16(2 * i, true);
-        values[i] = value === -32768 ? NaN : value * entry.precision;
-      }
-    } else {
-      values = new Float32Array(bytes);
-      if (new Uint8Array(new Uint16Array([1]).buffer)[0] !== 1) {
-        for (let i = 0; i < expected; i++) values[i] = decoded.getFloat32(4 * i, true);
-      }
-    }
     // Continue every cell's latest 30-year trend so the timeline can run past the record.
     const size = info.width * info.height;
+    const values = await decodeGrid(entry, size * entry.years.length);
     const future = futureYears(entry.years);
     return { ...info, years: entry.years.concat(future), observed: entry.years.length,
       values: extendGrid(values, info.width, entry.years.length, future.length, future[0]), size };
@@ -176,6 +200,7 @@ async function selectDate(index, {scrub = false} = {}) {
   chartData = chartCursor = chartLayout = null;
   clearChartInterval();
   $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
+  $('historical-averages').hidden = true;
   $('chart-tooltip').hidden = true;
   $('chart-readout').textContent = '';
   mapHover = null;
@@ -193,9 +218,9 @@ async function selectDate(index, {scrub = false} = {}) {
   $('layer-baseline').textContent = timeline[0].year + '–' + timeline[Math.max(0, lastObservedIndex())].year + ' · Baseline ' + info.reference;
   for (const id of ['csv', 'chart-png', 'trend-json', 'map-png']) $(id).disabled = true;
   try {
-    const data = await loadDataset(key, period);
+    const [data, baselineGrid] = await Promise.all([loadDataset(key, period), loadBaseline(info, period)]);
     if (version !== loadVersion) return false;
-    active = { ...data, key, period };
+    active = { ...data, key, period, baselineGrid };
     rasterMap = null;
     $('map-status').hidden = true;
     $('chart').closest('.inspector').setAttribute('aria-busy', 'false');
@@ -257,7 +282,11 @@ function updateTimeline() {
   Object.assign($('year'), {min: 0, max: last, value: timelineIndex});
   $('year').setAttribute('aria-label', 'Timeline ' + unit);
   $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : label);
-  $('year-label').value = projectedNow ? label + ' · projected' : label;
+  Object.assign($('year-entry'), {value: year, disabled: false});
+  $('timeline-period').textContent = label.slice(0, -String(year).length).trim();
+  $('timeline-period').hidden = periodKey() === 'annual';
+  $('timeline-projected').hidden = !projectedNow;
+  setYearEntryStatus('');
   $('year').closest('.timeline').classList.toggle('is-projected', projectedNow);
   $('jump-latest').hidden = !projectedNow;
   $('projected-badge').hidden = !projectedNow;
@@ -267,6 +296,31 @@ function updateTimeline() {
   $('play').disabled = !last;
   $('previous').setAttribute('aria-label', 'Previous ' + unit);
   $('next').setAttribute('aria-label', 'Next ' + unit);
+}
+
+function setYearEntryStatus(message) {
+  $('year-entry-status').textContent = message;
+  $('year-entry-status').hidden = !message;
+}
+
+function jumpToTypedYear() {
+  const input = $('year-entry');
+  const typed = input.value.trim();
+  if (typed === String(year) || !timeline.length) return;
+  if (!/^\d{4}$/.test(typed)) {
+    input.value = year;
+    setYearEntryStatus('Enter a four-digit year.');
+    return;
+  }
+  const period = periodKey();
+  const entries = timeline.filter(entry => entry.period === period);
+  const requested = Number(typed);
+  const target = clamp(requested, entries[0].year, entries.at(-1).year);
+  stop();
+  selectDate(nearestIndex(timeline, mode, target, period));
+  if (target !== requested) {
+    setYearEntryStatus('Available years ' + entries[0].year + '–' + entries.at(-1).year + '. Showing ' + target + '.');
+  }
 }
 
 function update(fade = 0, {scrub = false} = {}) {
@@ -291,6 +345,11 @@ function update(fade = 0, {scrub = false} = {}) {
   // The chart is the slow part. While the thumb is moving, keep the map in step
   // and paint the chart once the year is released.
   if (!scrub) updateInspector();
+  else if (chartData?.other) {
+    updateLocationValues(chartData, idx);
+    const basis = Math.min(idx, active.observed - 1);
+    updateComparisonTrend(chartData, basis, slopeAt(chartData.series, basis) * 10);
+  }
   queueDraw(fade);
 }
 
@@ -426,17 +485,29 @@ function drawMap(fade) {
   drawLine(draw, land, '#122e3199', .68);
   drawLine(draw, borders, '#162e3140', .45);
   drawLine(draw, {type: 'Sphere'}, '#a3c5ba78', 1);
-  const location = cell(point).center;
-  if (view === 'map' || d3.geoDistance(location, projection.invert(projection.translate())) < Math.PI / 2) {
-    const [x, y] = projection(location);
-    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
-    ctx.lineWidth = 2; ctx.strokeStyle = '#14282b'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.strokeStyle = '#fffce8'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2);
-    ctx.fillStyle = '#fffce8'; ctx.fill();
-  }
+  if (comparison) drawPlaceMarker(cell(comparison.point).center, true);
+  drawPlaceMarker(cell(point).center);
   rendered = true;
+}
+
+function drawPlaceMarker(location, other = false) {
+  if (view === 'globe' && d3.geoDistance(location, projection.invert(projection.translate())) >= Math.PI / 2) return;
+  const [x, y] = projection(location);
+  const color = other ? '#8ee3ff' : '#fffce8';
+  ctx.beginPath();
+  if (other) {
+    ctx.moveTo(x, y - 11);
+    ctx.lineTo(x + 11, y);
+    ctx.lineTo(x, y + 11);
+    ctx.lineTo(x - 11, y);
+    ctx.closePath();
+  } else {
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+  }
+  ctx.lineWidth = 5; ctx.strokeStyle = '#14282b'; ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2);
+  ctx.fillStyle = color; ctx.fill();
 }
 
 function drawLine(draw, feature, color, weight) {
@@ -462,34 +533,52 @@ function updateInspector() {
   const basisYear = active.years[basis];
   const steps = active.years.length - active.observed;
   let future = steps ? forecast(series, active.observed - 1, steps, active.years[active.observed]) : null;
-  // A gap with no series of its own takes the value already filled into the map.
+  // Only the single-place view shows values filled from neighboring cells.
   if (!future && steps) {
-    const tail = series.slice(active.observed);
-    if (tail.length && tail.every(Number.isFinite)) {
-      future = tail.map(value => ({value, low: value, high: value, filled: true}));
+    if (comparison) {
+      series.fill(NaN, active.observed);
+    } else {
+      const tail = series.slice(active.observed);
+      if (tail.every(Number.isFinite)) {
+        future = tail.map(value => ({value, low: value, high: value, filled: true}));
+      }
     }
   }
   // Measured values, then the central projection (the map shows the simulated year instead).
   const central = future ? series.map((value, i) => i < active.observed ? value : future[i - active.observed].value) : series;
-  const range = projectedNow && future ? future[idx - active.observed] : null;
+  const otherIndex = comparison ? cell(comparison.point).index : null;
+  const otherSeries = comparison ? history(otherIndex).slice(0, active.observed) : [];
+  const otherFuture = steps && comparison ? forecast(otherSeries, active.observed - 1, steps, active.years[active.observed]) : null;
+  const other = comparison ? {index: otherIndex, values: otherSeries.concat(otherFuture?.map(f => f.value) ?? []), future: otherFuture} : null;
+  chartData = {series, central, idx, index, estimate, basis, future, other};
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
-  $('value-label').textContent = labelForYear(year) + (projectedNow ? ' projected anomaly' : ' anomaly');
-  $('value').classList.toggle('is-projected', projectedNow);
-  setMetric($('value'), central[idx], active.unit);
-  if (range && !range.filled && range.high - range.low > 1e-9) {
-    const error = document.createElement('small');
-    error.className = 'pm';
-    error.textContent = '± ' + ((range.high - range.low) / 2).toFixed(2) + ' (95% range)';
-    $('value').append(error);
-  }
+  updateLocationValues(chartData, idx);
+  updateHistoricalAverages(chartData);
   setMetric($('slope'), estimate?.rate, active.unit);
-  $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
+  $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + placeName +
+    (comparison ? ' and ' + comparison.name : '') +
     ', measured from ' + active.years[0] + ' to ' + active.years[active.observed - 1] +
     (steps ? ' and projected to ' + active.years.at(-1) : '') + '. Use arrow keys to inspect, Enter to select endpoints, and Escape to clear.');
+  $('chart-primary-legend').textContent = other ? 'A record' : 'Measured';
+  $('chart-fit-legend').textContent = other ? 'A trend line' : 'Trend line';
+  $('chart-projection-legend').hidden = !future;
+  $('chart-path-legend').hidden = !future;
+  $('chart-projection-text').textContent = other ? 'A projection and range' : 'Projection, with 95% range';
+  $('chart-path-text').textContent = other ? 'A possible path' : 'One possible path';
+  $('chart-compare-legend').hidden = !other;
+  $('chart-compare-projection').hidden = !otherFuture;
+  $('chart-help').textContent = other ? 'Select two points to fit that span for A. Both records share the same scale.'
+    : 'The line fits this place’s measured record. Select two points to fit that span.';
+  $('trend-title').textContent = other ? 'Is the primary trend meaningful?' : 'Is the trend meaningful?';
+  $('map-primary').textContent = placeName;
+  $('map-comparison').textContent = comparison?.name ?? '';
   const empty = !series.some(Number.isFinite);
-  for (const id of ['csv', 'chart-png', 'trend-json']) $(id).disabled = empty;
+  for (const id of ['csv', 'trend-json']) $(id).disabled = empty;
+  $('chart-png').disabled = empty && !other?.values.some(Number.isFinite);
+  $('csv').querySelector('b').textContent = other ? 'Primary data and projection' : 'Data, trend line and projection';
+  $('trend-json').querySelector('b').textContent = other ? 'Primary trend statistics' : 'Trend statistics';
   $('map-png').disabled = false;
   const hasTest = estimate?.p != null;
   $('trend-details').hidden = !hasTest;
@@ -509,9 +598,95 @@ function updateInspector() {
   } else {
     $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
   }
-  chartData = {series, central, idx, estimate, basis, future};
+  updateComparisonTrend(chartData, basis, estimate?.rate);
   updateChartInterval();
   drawChart();
+}
+
+function historicalAverage(values, cellIndex) {
+  let count = 0, sum = 0, firstYear = null, lastYear = null;
+  for (let i = 0; i < active.observed; i++) {
+    if (!Number.isFinite(values[i])) continue;
+    sum += values[i];
+    count++;
+    firstYear ??= active.years[i];
+    lastYear = active.years[i];
+  }
+  return {
+    anomaly: count ? sum / count : null,
+    baseline: active.key === 'temperature' && count ? 0 : active.baselineGrid?.[cellIndex] ?? null,
+    count, firstYear, lastYear,
+  };
+}
+
+function updateHistoricalAverages({series, index, other}) {
+  $('historical-averages').hidden = false;
+  $('average-places').hidden = !other;
+  $('average-baseline-b').hidden = !other;
+  $('average-record-b').hidden = !other;
+  $('average-period').textContent = periodTitle() + ' baseline';
+  $('average-reference').textContent = active.reference;
+  const nasa = active.key === 'temperature';
+  $('average-baseline-note').textContent = nasa
+    ? 'NASA GISTEMP supplies anomalies. Zero is its reference level.'
+    : active.baselineGrid ? '' : 'Historical baseline unavailable for this layer.';
+  $('average-baseline-note').hidden = !nasa && Boolean(active.baselineGrid);
+
+  const a = historicalAverage(series, index);
+  const b = other && historicalAverage(other.values, other.index);
+  const unit = active.climatology?.unit ?? active.unit;
+  for (const [id, average] of [['a', a], ['b', b]]) {
+    if (!average) continue;
+    setMetric($('average-baseline-' + id), average.baseline, unit, {showSign: false});
+    const record = $('average-record-' + id);
+    setMetric(record, average.anomaly, active.unit);
+    if (average.count) {
+      const coverage = document.createElement('small');
+      const years = average.firstYear === average.lastYear ? average.firstYear : average.firstYear + '–' + average.lastYear;
+      coverage.textContent = years + ' · ' + average.count + (average.count === 1 ? ' value' : ' values');
+      record.append(coverage);
+    }
+  }
+}
+
+function updateLocationValues({central, index, future, other}, idx) {
+  const trendMode = mode === 'trend';
+  const date = labelForYear(year);
+  const range = projectedNow ? future?.[idx - active.observed] : null;
+  const primary = other && trendMode ? grid[index] : central[idx];
+  const options = {stackUnit: Boolean(other) && active.unit.length > 3};
+  $('value-label').textContent = other ? 'A This place' : date + (projectedNow ? ' projected anomaly' : ' anomaly');
+  $('value').classList.toggle('is-projected', projectedNow);
+  setMetric($('value'), primary, active.unit, options);
+  if (!other && range && !range.filled && range.high - range.low > 1e-9) {
+    const error = document.createElement('small');
+    error.className = 'pm';
+    error.textContent = '± ' + ((range.high - range.low) / 2).toFixed(2) + ' (95% range)';
+    $('value').append(error);
+  }
+  if (!other) return;
+  const secondary = trendMode ? grid[other.index] : other.values[idx];
+  $('compare-period').textContent = trendMode ? (year - WINDOW + 1) + '–' + year + ' trend per decade'
+    : date + (projectedNow ? ' projected anomaly' : ' anomaly');
+  setMetric($('other-value'), secondary, active.unit, options);
+  setMetric($('difference-value'), primary - secondary, active.unit, options);
+}
+
+function updateComparisonTrend({index, other}, basis, rate) {
+  const output = $('compare-trend');
+  const secondary = other ? slopeAt(other.values, basis) * 10 : NaN;
+  output.hidden = !other || (index !== other.index && ![rate, secondary].every(Number.isFinite));
+  if (output.hidden) return;
+  if (index === other.index) {
+    output.textContent = 'Both places are in the same grid cell.';
+    return;
+  }
+  const span = (active.years[basis] - WINDOW + 1) + '–' + active.years[basis];
+  const higher = rate > secondary ? 'A' : 'B';
+  const finding = signed(rate) === signed(secondary) ? 'The fitted rates round to the same value'
+    : rate > 0 && secondary > 0 && active.unit === '°C' ? higher + ' warmed faster'
+    : higher + ' had the higher fitted trend';
+  output.textContent = span + ' · ' + finding + ' (A ' + signed(rate) + ', B ' + signed(secondary) + ' ' + active.unit + '/decade).';
 }
 
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
@@ -531,19 +706,27 @@ function mathExpression(...tokens) {
 }
 
 function mathNumber(value, digits, showSign = true) {
-  const formatted = showSign ? signed(value, digits) : value.toFixed(digits);
+  const formatted = showSign ? signed(value, digits) : value.toFixed(digits).replace(/^-/, '−');
   if (!/^[+−]/.test(formatted)) return mathToken('mn', formatted);
   const row = document.createElementNS(MATH_NS, 'mrow');
   row.append(mathToken('mo', formatted[0]), mathToken('mn', formatted.slice(1)));
   return row;
 }
 
-function setMetric(element, value, unit) {
+function setMetric(element, value, unit, {showSign = true, stackUnit = false} = {}) {
   if (!Number.isFinite(value)) {
     element.textContent = '—';
     return;
   }
-  element.replaceChildren(mathExpression(mathNumber(value, 2), mathToken('mtext', ' ' + unit)));
+  const number = mathNumber(value, 2, showSign);
+  if (stackUnit) {
+    const label = document.createElement('small');
+    label.className = 'metric-unit';
+    label.textContent = unit;
+    element.replaceChildren(mathExpression(number), label);
+  } else {
+    element.replaceChildren(mathExpression(number, mathToken('mtext', ' ' + unit)));
+  }
 }
 
 function chartColors(dark) {
@@ -551,6 +734,7 @@ function chartColors(dark) {
     text: dark ? '#b1c1b4' : '#526258', grid: dark ? '#384a40' : '#dde1d5', zero: '#a0aa9f',
     window: dark ? '#2d4135' : '#e1eadc', line: dark ? '#a6d6b8' : '#2d7655', dot: dark ? '#a6d6b8' : '#24523e',
     fit: dark ? '#f0a880' : '#a7462c', proj: dark ? PROJ.dark : PROJ.light,
+    other: dark ? '#8ed9f3' : '#14688b',
     band: dark ? '#b7a6ff2e' : '#6a4fd024', zone: dark ? '#b7a6ff12' : '#6a4fd00d',
     interval: dark ? '#eab37c' : '#934926', intervalFill: dark ? '#eab37c38' : '#ce8c5033',
     cursor: dark ? '#e8eee4' : '#244e3d', marker: '#51675c',
@@ -589,17 +773,29 @@ function chartFit(values) {
   return first < 0 ? null : lineFit(values, first, last);
 }
 
+function paintSeries(g, values, start, end, x, y, color, weight) {
+  g.beginPath();
+  let connected = false;
+  for (let i = start; i < end; i++) {
+    const value = values[i];
+    if (!Number.isFinite(value)) { connected = false; continue; }
+    if (connected) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
+    connected = true;
+  }
+  g.strokeStyle = color; g.lineWidth = weight; g.lineJoin = 'round'; g.stroke();
+}
+
 // Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
 // strokes and type so the same routine serves the panel and the PNG export.
 function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
-  const {series, central, idx, estimate, basis, future} = chartData;
+  const {series, central, idx, index, estimate, basis, future, other} = chartData;
   const c = chartColors(dark);
   const observedCount = active.observed;
-  const finite = series.filter(Number.isFinite);
+  const finite = series.concat(other?.values ?? []).filter(Number.isFinite);
   const left = ox + 37 * k, right = ox + w - 7 * k, top = oy + 8 * k, bottom = oy + h - 20 * k;
   if (!finite.length) {
     g.font = 12 * k + 'px sans-serif'; g.fillStyle = c.text;
-    g.fillText('No observations for this grid cell', ox + 5 * k, oy + h / 2);
+    g.fillText(other ? 'No observations for either grid cell' : 'No observations for this grid cell', ox + 5 * k, oy + h / 2);
     return {left, right, bottom, top, x: () => left};
   }
   const extremes = future ? future.flatMap(f => [f.low, f.high]) : [];
@@ -607,11 +803,11 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   const x = i => left + i / (series.length - 1) * (right - left);
   const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
   const lastX = x(observedCount - 1);
-  if (future) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
+  if (future || other?.future) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
   if (interactive && intervalAnchor !== null) {
-    const other = intervalEnd ?? chartCursor ?? intervalAnchor;
+    const endpoint = intervalEnd ?? chartCursor ?? intervalAnchor;
     g.fillStyle = c.intervalFill;
-    g.fillRect(Math.min(x(intervalAnchor), x(other)), top, Math.abs(x(intervalAnchor) - x(other)), bottom - top);
+    g.fillRect(Math.min(x(intervalAnchor), x(endpoint)), top, Math.abs(x(intervalAnchor) - x(endpoint)), bottom - top);
   } else if (estimate) {
     g.fillStyle = c.window;
     g.fillRect(x(basis - WINDOW + 1), top, x(basis) - x(basis - WINDOW + 1), bottom - top);
@@ -626,7 +822,7 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   const axisY = oy + h - 3 * k;
   g.fillText(active.years[0], left, axisY);
   g.textAlign = 'right'; g.fillText(active.years.at(-1), right, axisY);
-  if (future) {
+  if (future || other?.future) {
     g.textAlign = lastX > right - 60 * k ? 'right' : 'center';
     g.fillText(active.years[observedCount - 1], Math.min(lastX, right - 30 * k), axisY);
   }
@@ -637,15 +833,15 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     for (let i = future.length - 1; i >= 0; i--) g.lineTo(x(observedCount + i), y(future[i].low));
     g.closePath(); g.fillStyle = c.band; g.fill();
   }
-  g.beginPath();
-  let connected = false;
-  for (let i = 0; i < observedCount; i++) {
-    const value = series[i];
-    if (!Number.isFinite(value)) { connected = false; continue; }
-    if (connected) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
-    connected = true;
+  if (other) {
+    paintSeries(g, other.values, 0, observedCount, x, y, c.other, (other.index === index ? 3.3 : 1.6) * k);
+    if (other.future) {
+      g.setLineDash([5 * k, 3 * k]);
+      paintSeries(g, other.values, observedCount, series.length, x, y, c.other, 1.5 * k);
+      g.setLineDash([]);
+    }
   }
-  g.strokeStyle = c.line; g.lineWidth = 1.35 * k; g.lineJoin = 'round'; g.stroke();
+  paintSeries(g, series, 0, observedCount, x, y, c.line, 1.35 * k);
   const fit = chartFit(central);
   if (fit) {
     g.beginPath();
@@ -679,20 +875,26 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.beginPath(); g.arc(x(idx), y(central[idx]), 3.5 * k, 0, Math.PI * 2);
     g.fillStyle = idx >= observedCount ? c.proj : c.dot; g.fill();
   }
+  if (Number.isFinite(other?.values[idx])) {
+    g.strokeStyle = c.other; g.lineWidth = 1.5 * k;
+    g.strokeRect(x(idx) - 3.5 * k, y(other.values[idx]) - 3.5 * k, 7 * k, 7 * k);
+  }
   return {left, right, bottom, top, x, y, c};
 }
 
 function chartPointLabel(index) {
-  const {central, future} = chartData;
-  if (!Number.isFinite(central[index])) return labelForYear(active.years[index]) + ' · No data';
+  const {central, future, other} = chartData;
+  const label = labelForYear(active.years[index]) + (index >= active.observed ? ' (projected)' : '');
   const f = index >= active.observed ? future?.[index - active.observed] : null;
-  return labelForYear(active.years[index]) + ' · ' + signed(central[index]) + ' ' + active.unit +
-    (f ? ' ± ' + ((f.high - f.low) / 2).toFixed(2) + ' (projected)' : '');
+  const valueText = value => Number.isFinite(value) ? signed(value) + ' ' + active.unit : 'No data';
+  const a = valueText(central[index]) +
+    (f && f.high > f.low ? ' ± ' + ((f.high - f.low) / 2).toFixed(2) : '');
+  return other ? label + '\nA ' + a + '\nB ' + valueText(other.values[index]) : label + ' · ' + a;
 }
 
 function drawChart() {
   if (!active || !chartData) return;
-  const {series, central, idx} = chartData;
+  const {series, central, idx, other} = chartData;
   const g = chart.getContext('2d');
   const [w, h] = sizeCanvas(chart);
   g.clearRect(0, 0, w, h);
@@ -702,7 +904,7 @@ function drawChart() {
   $('chart-readout').textContent = label;
   const tooltip = $('chart-tooltip');
   tooltip.textContent = label;
-  const hasData = series.some(Number.isFinite);
+  const hasData = series.some(Number.isFinite) || other?.values.some(Number.isFinite);
   tooltip.hidden = chartCursor == null || !hasData;
   const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark});
   chartLayout = {left, right, bottom};
@@ -724,6 +926,10 @@ function drawChart() {
     if (Number.isFinite(central[inspected])) {
       g.beginPath(); g.arc(cursorX, y(central[inspected]), 4.5, 0, Math.PI * 2);
       g.fillStyle = inspected >= active.observed ? c.proj : c.cursor; g.fill();
+    }
+    if (Number.isFinite(other?.values[inspected])) {
+      g.strokeStyle = c.other; g.lineWidth = 1.5;
+      g.strokeRect(cursorX - 4, y(other.values[inspected]) - 4, 8, 8);
     }
     tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
       0, Math.max(0, w - tooltip.offsetWidth)) + 'px';
@@ -1215,10 +1421,15 @@ function locateCell(lon, lat) {
 }
 
 function selectMapCell(location) {
+  const name = locateCell(location[0], location[1]);
+  if (choosingComparison) {
+    setComparison(name, location);
+    return;
+  }
   clearChartInterval();
   point = location;
-  placeName = locateCell(location[0], location[1]);
-  $('place-query').value = '';
+  placeName = name;
+  $('place-query').value = primaryQuery = '';
   updateInspector();
   queueDraw();
 }
@@ -1324,6 +1535,7 @@ function closePlaceResults() {
   $('place-results').hidden = true;
   $('place-results').replaceChildren();
   $('place-query').setAttribute('aria-expanded', 'false');
+  $('place-query').removeAttribute('aria-activedescendant');
 }
 
 function renderPlaceResults(matches) {
@@ -1331,6 +1543,7 @@ function renderPlaceResults(matches) {
   placeActive = matches.length ? 0 : -1;
   const list = $('place-results');
   if (!matches.length) {
+    $('place-query').removeAttribute('aria-activedescendant');
     list.replaceChildren(Object.assign(document.createElement('li'), {
       className: 'place-empty',
       textContent: 'No matching city. Try another name, or click the map.',
@@ -1343,10 +1556,11 @@ function renderPlaceResults(matches) {
   list.replaceChildren(...matches.map((place, index) => {
     const item = document.createElement('li');
     item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', index === placeActive);
     item.id = 'place-option-' + index;
     const button = document.createElement('button');
     button.type = 'button';
-    button.setAttribute('aria-selected', index === placeActive ? 'true' : 'false');
+    button.tabIndex = -1;
     button.innerHTML = '<span class="place-name"></span><span class="place-region"></span>';
     button.querySelector('.place-name').textContent = place.name;
     button.querySelector('.place-region').textContent = place.region || '';
@@ -1364,23 +1578,72 @@ function highlightPlace(index) {
   if (!placeMatches.length) return;
   placeActive = (index + placeMatches.length) % placeMatches.length;
   for (const [i, item] of [...$('place-results').children].entries()) {
-    const button = item.querySelector('button');
-    if (button) button.setAttribute('aria-selected', i === placeActive ? 'true' : 'false');
+    item.setAttribute('aria-selected', i === placeActive);
   }
   $('place-query').setAttribute('aria-activedescendant', 'place-option-' + placeActive);
   $('place-option-' + placeActive)?.scrollIntoView({block: 'nearest'});
 }
 
-function goToPlace(place) {
+function goToPlace(place, asComparison = choosingComparison) {
+  if (asComparison) {
+    setComparison(place.name, [place.lon, place.lat]);
+    return;
+  }
+  if (choosingComparison) setChoosingComparison(false);
   clearChartInterval();
   placeName = place.name;
   point = [place.lon, place.lat];
-  $('place-query').value = place.name;
+  $('place-query').value = primaryQuery = place.name;
   closePlaceResults();
   recenter();
   updateInspector();
   queueDraw();
 }
+
+function setChoosingComparison(choosing) {
+  if (choosing && !choosingComparison) primaryQuery = $('place-query').value;
+  choosingComparison = choosing;
+  closePlaceResults();
+  const input = $('place-query');
+  input.value = choosing ? '' : primaryQuery;
+  input.placeholder = choosing ? 'Search for the comparison place…' : 'Search a city or region…';
+  $('place-query-label').textContent = choosing ? 'Search for the comparison place' : 'Search cities and regions';
+  $('compare').setAttribute('aria-pressed', choosing);
+  $('compare-hint').hidden = !choosing;
+  earth.setAttribute('aria-describedby', choosing ? 'compare-hint' : 'map-readout');
+  earth.classList.toggle('picking-comparison', choosing);
+  if (choosing) {
+    input.focus();
+    if ($('place-results').hidden) renderPlaceResults(searchPlaces(''));
+  }
+}
+
+function setComparison(name, location) {
+  comparison = location ? {name, point: location} : null;
+  const comparing = Boolean(comparison);
+  setChoosingComparison(false);
+  $('compare').textContent = comparing ? 'Change comparison' : 'Compare';
+  $('compare-status').textContent = comparing ? 'Comparing ' + placeName + ' with ' + name + '.' : 'Comparison cleared.';
+  $('comparison-place').hidden = !comparing;
+  $('comparison-name').textContent = name;
+  for (const id of ['compare-clear', 'compare-period', 'other-metric', 'difference-metric', 'map-places']) $(id).hidden = !comparing;
+  $('slope-metric').hidden = comparing;
+  $('numbers').classList.toggle('with-comparison', comparing);
+  updateInspector();
+  queueDraw();
+}
+
+$('compare').addEventListener('click', () => setChoosingComparison(!choosingComparison));
+$('compare-clear').addEventListener('click', () => {
+  setComparison('', null);
+  $('compare').focus();
+});
+$('compare-map').addEventListener('click', event => {
+  event.preventDefault();
+  closePlaceResults();
+  earth.focus({preventScroll: true});
+  $('map-panel-heading').scrollIntoView({block: 'start'});
+});
 
 $('place-query').addEventListener('focus', () => {
   renderPlaceResults(searchPlaces($('place-query').value));
@@ -1402,12 +1665,17 @@ $('place-query').addEventListener('keydown', event => {
       goToPlace(placeMatches[placeActive]);
     }
   } else if (event.key === 'Escape') {
-    closePlaceResults();
-    $('place-query').blur();
+    if (choosingComparison) {
+      setChoosingComparison(false);
+      $('compare').focus();
+    } else {
+      closePlaceResults();
+      $('place-query').blur();
+    }
   }
 });
 $('place-query').addEventListener('blur', () => {
-  setTimeout(closePlaceResults, 120);
+  setTimeout(() => { if (document.activeElement !== $('place-query')) closePlaceResults(); }, 120);
 });
 $('mode').addEventListener('change', event => {
   mode = event.target.value;
@@ -1433,6 +1701,23 @@ $('year').addEventListener('input', event => {
   selectDate(Number(event.target.value), {scrub: true});
 });
 $('year').addEventListener('change', () => { if (active) update(120); });
+$('timeline-date').addEventListener('submit', event => {
+  event.preventDefault();
+  jumpToTypedYear();
+  $('year-entry').select();
+});
+$('year-entry').addEventListener('focus', event => {
+  stop();
+  event.target.select();
+});
+$('year-entry').addEventListener('input', () => setYearEntryStatus(''));
+$('year-entry').addEventListener('change', jumpToTypedYear);
+$('year-entry').addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  event.target.value = year;
+  setYearEntryStatus('');
+  event.target.blur();
+});
 $('play').addEventListener('click', play);
 $('previous').addEventListener('click', () => { stop(); selectDate(timelineIndex - 1); });
 $('next').addEventListener('click', () => { stop(); selectDate(timelineIndex + 1); });
@@ -1567,20 +1852,26 @@ $('chart-png').addEventListener('click', () => {
   g.fillStyle = c.text; g.font = '22px "IBM Plex Sans", sans-serif';
   g.fillText(periodTitle() + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
     coords(center).replace(' · ', ', ') + '.', pad, 116);
-  const {future, central} = chartData;
+  const {future, central, other} = chartData;
   const fit = chartFit(central);
-  const legend = [[c.line, 'Measured', false]];
+  const legend = [[c.line, other ? 'A · ' + placeName : 'Measured', false]];
+  if (other) legend.push([c.other, 'B · ' + comparison.name, false]);
   if (fit) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
-  if (future) legend.push([c.proj, 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
+  if (future) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
+  if (other?.future) legend.push([c.other, 'B projection', true]);
   let lx = pad;
+  let ly = 160;
   g.font = '20px "IBM Plex Sans", sans-serif';
   for (const [color, label, dashed] of legend) {
-    g.beginPath(); g.moveTo(lx, 160); g.lineTo(lx + 38, 160);
+    const length = 48 + g.measureText(label).width;
+    if (lx + length > W - pad) { lx = pad; ly += 32; }
+    g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + 38, ly);
     g.strokeStyle = color; g.lineWidth = 4; g.setLineDash(dashed ? [10, 6] : []); g.stroke(); g.setLineDash([]);
-    g.fillStyle = ink; g.fillText(label, lx + 48, 167);
-    lx += 48 + g.measureText(label).width + 40;
+    g.fillStyle = ink; g.fillText(label, lx + 48, ly + 7);
+    lx += length + 40;
   }
-  paintChart(g, pad, 190, W - 2 * pad, H - 190 - 86, {dark, k, interactive: false});
+  const chartTop = ly + 30;
+  paintChart(g, pad, chartTop, W - 2 * pad, H - chartTop - 86, {dark, k, interactive: false});
   g.fillStyle = c.text; g.font = '18px "IBM Plex Sans", sans-serif';
   g.fillText('Data: ' + active.agency + ', ' + active.product + '. ' + active.source, pad, H - 34);
   g.textAlign = 'right'; g.fillText('GQ Atlas', W - pad, H - 34);
@@ -1589,7 +1880,7 @@ $('chart-png').addEventListener('click', () => {
 
 $('map-png').addEventListener('click', () => {
   if (!active || !rendered) return;
-  const head = 96, foot = 54;
+  const head = 96, foot = comparison ? 102 : 54;
   const [canvas, g] = exportCanvas(earth.width, earth.height + head + foot, true);
   g.fillStyle = '#0b191d'; g.fillRect(0, 0, canvas.width, canvas.height);
   g.drawImage(earth, 0, head);
@@ -1599,6 +1890,11 @@ $('map-png').addEventListener('click', () => {
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   g.fillText((mode === 'trend' ? 'Change per decade' : 'Anomaly relative to ' + active.reference) +
     '. Color scale −' + scale + ' to +' + scale + ' ' + active.unit + '.', 24, 74);
+  if (comparison) {
+    g.fillStyle = '#fffce8'; g.fillText('○ A  ' + placeName, 24, canvas.height - 68, canvas.width - 48);
+    g.fillStyle = '#8ee3ff'; g.fillText('◇ B  ' + comparison.name, 24, canvas.height - 44, canvas.width - 48);
+    g.fillStyle = '#afbfb5';
+  }
   g.fillText('Data: ' + active.agency + ', ' + active.product + '. GQ Atlas.', 24, canvas.height - 20);
   canvas.toBlob(blob => saveBlob(blob, [layer, mode, $('map-year').textContent.replace(/\s+/g, '-'), 'map'].join('-') + '.png'), 'image/png');
 });
@@ -1656,8 +1952,9 @@ document.addEventListener('atlas-find-place', event => {
   const match = active ? searchPlaces(query)[0] : null;
   $('atlas').scrollIntoView({block: 'start'});
   if (match && query.trim()) {
-    goToPlace(match);
+    goToPlace(match, false);
   } else {
+    if (choosingComparison) setChoosingComparison(false);
     $('place-query').value = query;
     $('place-query').focus({preventScroll: true});
   }

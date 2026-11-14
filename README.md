@@ -14,9 +14,10 @@ Live site: [space.advay.ca](https://space.advay.ca)
 
 1. Type a city on the landing page, or open the world map.
 2. Choose a climate layer.
-3. Move the timeline. Years after the latest data are violet: projections to 2100 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
-4. Read the side panel for the anomaly, trend per decade, and significance.
-5. Download the series with its trend line and projection (CSV), the fit statistics (JSON), or the chart and map (PNG).
+3. Drag the timeline or type a year in its date field. Years after the latest data are violet: projections to 2100 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
+4. Use **Compare** under place search to choose a second city or click a second cell on the map. The selected layer, period, and year apply to both places. Read A minus B in the panel and follow the two records on one chart. Use **Clear comparison** to return to one place.
+5. Read the trend and significance for the primary cell. When both cells have 30 consecutive years in the same window, the comparison also shows their fitted rates.
+6. Download the primary series (CSV), its fit statistics (JSON), or the chart and map (PNG).
 
 Every layer's dataset page and original NetCDF file are linked under **Where this data comes from**.
 
@@ -24,26 +25,17 @@ Every layer's dataset page and original NetCDF file are linked under **Where thi
 
 - **Colors** show anomalies: warmer/cooler or wetter/drier than the usual baseline.
 - **Anomaly** means difference from normal, not the absolute value.
+- **Historical averages** shows the period baseline and the mean of all available historical anomalies for each selected cell. GISTEMP is supplied in anomalies relative to a zero reference.
 - **Trend per decade** is the average rate of change over about 30 years.
 - **Significant at 5%** means a flat (no-change) line is unlikely for that grid cell. It does not prove a cause.
 - **Projected** values are a statistical estimate from past data with a stated error range, not a climate model forecast.
 - Cities jump to the **nearest coarse grid cell** (~2°), not a weather station.
 
-## Run locally
+## NASA data
 
-```sh
-python3 -m http.server 8080 --bind 127.0.0.1 --directory dist
-```
+- [GISTEMP v4, Land–Ocean Temperature Index](https://data.giss.nasa.gov/gistemp/data_v4.html) (NASA GISS). This is the surface temperature anomaly layer, on a 2° grid, compared with 1951–1980. Original file: [gistemp1200_GHCNv4_ERSSTv5.nc.gz](https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz).
 
-Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/).
-
-## Push changes to GitHub
-
-```sh
-bash scripts/push-to-github.sh "what changed"
-```
-
-The first run links this folder to `advayc/space-apps`; every run commits and pushes to the `landing-redesign` branch (set `BRANCH=main` to push straight to the live site).
+That is the only NASA dataset in the atlas. Precipitation, sea surface temperature, sea ice, and the reanalysis layers come from NOAA.
 
 ## Data
 
