@@ -39,7 +39,8 @@ function drawRecord() {
   $('record-y').replaceChildren(...ticks.map(value => {
     const tick = document.createElement('span');
     const fraction = (max - value) / range;
-    tick.textContent = Math.abs(value) < 5e-7 ? '0' : (value < 0 ? '−' : '+') + Math.abs(value).toFixed(step >= 1 ? 0 : 1);
+    const number = Math.abs(value) < 5e-7 ? '0' : (value < 0 ? '−' : '+') + Math.abs(value).toFixed(step >= 1 ? 0 : 1);
+    tick.textContent = number + ' °C';
     tick.style.top = fraction * 100 + '%';
     if (fraction < 0.04) tick.className = 'is-edge-top';
     else if (fraction > 0.96) tick.className = 'is-edge-bottom';
