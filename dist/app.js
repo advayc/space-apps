@@ -1,4 +1,5 @@
 import { WINDOW, slopeAt, trend } from './statistics.js';
+import { months, seasons, dateLabel, makeTimeline, nearestIndex } from './timeline.js';
 
 const $ = id => document.getElementById(id);
 const earth = $('earth');
@@ -10,15 +11,8 @@ let outgoingFade, chartFade, pendingFade = 0, rendered = false;
 const raster = document.createElement('canvas');
 const rasterCtx = raster.getContext('2d');
 const NO_DATA_COLOR = [88, 99, 107];
-const places = {
-  arctic: ['Canadian Arctic', -95, 74],
-  toronto: ['Toronto', -79.38, 43.65],
-  pacific: ['Equatorial Pacific', -137, 0],
-  amazon: ['Central Amazon', -62, -4],
-  sahel: ['West African Sahel', 2, 15],
-  india: ['Central India', 79, 22],
-  antarctica: ['East Antarctica', 88, -76],
-};
+const DEFAULT_PLACE = {name: 'Canadian Arctic', region: 'Canada', lon: -95, lat: 74, kind: 'region'};
+let cities = [DEFAULT_PLACE];
 const themes = {
   temperature: ['#3267a5', '#80b8ce', '#eeeacb', '#e28b53', '#af3a2d'],
   water: ['#a14d2c', '#d49c67', '#eeeacb', '#73b5a5', '#28786f'],
@@ -45,19 +39,15 @@ function rgb(hex) {
 
 let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'globe', mode = 'annual', year = 2025;
-let rotation = [93, -46], zoom = 1, placeKey = 'arctic', point = places.arctic.slice(1);
+let rotation = [93, -46], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let chartData, chartCursor, chartLayout;
+let placeMatches = [], placeActive = -1;
 const chart = $('chart');
 const datasets = new Map();
-const months = new Map([
-  ['01', 'January'], ['02', 'February'], ['03', 'March'], ['04', 'April'],
-  ['05', 'May'], ['06', 'June'], ['07', 'July'], ['08', 'August'],
-  ['09', 'September'], ['10', 'October'], ['11', 'November'], ['12', 'December'],
-]);
-const seasons = new Map([['djf', 'Dec–Feb'], ['mam', 'Mar–May'], ['jja', 'Jun–Aug'], ['son', 'Sep–Nov']]);
 let month = '01', season = 'djf', loadVersion = 0;
+let timeline = [], timelineIndex = 0, playing = false;
 let mapHover = null;
 
 function periodKey() {
@@ -70,11 +60,7 @@ function periodTitle() {
   return months.get(periodKey()) ?? seasons.get(periodKey()) ?? 'Annual';
 }
 
-function dateLabel(y) {
-  const prefix = mode === 'monthly' ? months.get(month).slice(0, 3)
-    : mode === 'seasonal' ? seasons.get(season) : '';
-  return prefix ? prefix + ' ' + y : String(y);
-}
+const labelForYear = y => dateLabel(y, periodKey());
 
 function refreshPeriodControl() {
   const subannual = mode === 'monthly' || mode === 'seasonal';
@@ -139,53 +125,75 @@ async function loadDataset(key, period) {
   return request;
 }
 
-async function selectLayer(key) {
+function selectLayer(key) {
   stop();
   stopCamera();
-  const version = ++loadVersion;
   layer = key;
+  timeline = makeTimeline(catalog[layer], mode);
+  renderTimelineTicks();
+  return selectDate(nearestIndex(timeline, mode, year, periodKey()));
+}
+
+async function selectDate(index) {
+  const entry = timeline[index];
+  if (!entry) return false;
+  const {period} = entry;
+  const version = ++loadVersion;
+  timelineIndex = index;
+  year = entry.year;
+  if (mode === 'monthly') month = period;
+  if (mode === 'seasonal') season = period;
+  $('period').value = period;
+  updateTimeline();
+
+  if (active?.key === layer && active.period === period) {
+    update(160);
+    return true;
+  }
   active = null;
   chartData = chartCursor = chartLayout = null;
+  $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
   $('chart-tooltip').hidden = true;
   $('chart-readout').textContent = '';
-  chart.getContext('2d').clearRect(0, 0, chart.width, chart.height);
   mapHover = null;
   updateMapReadout();
   $('map-status').hidden = false;
   $('map-status').textContent = 'Loading climate data…';
+  const key = layer;
   const info = catalog[key];
   $('layer-description').textContent = info.description;
   $('map-source').textContent = info.shortSource;
   $('map-source').href = info.source;
-  $('layer-baseline').textContent = '';
+  $('layer-baseline').textContent = timeline[0].year + '–' + timeline.at(-1).year + ' · Baseline ' + info.reference;
   $('csv').disabled = true;
   try {
-    const data = await loadDataset(key, periodKey());
-    if (version !== loadVersion) return;
-    active = data;
+    const data = await loadDataset(key, period);
+    if (version !== loadVersion) return false;
+    active = { ...data, key, period };
     rasterMap = null;
-    year = clamp(year, minimumYear(), active.years.at(-1));
     $('map-status').hidden = true;
+    $('chart').closest('.inspector').setAttribute('aria-busy', 'false');
     update(220);
     if (!reducedMotion.matches) {
       chartFade?.cancel();
       chartFade = chart.animate([{ opacity: .55 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
     }
+    return true;
   } catch (error) {
     if (version === loadVersion) {
       $('map-status').textContent = 'Climate data could not load.';
+      $('chart').closest('.inspector').setAttribute('aria-busy', 'false');
       const retry = document.createElement('button');
       retry.type = 'button';
       retry.className = 'utility';
       retry.textContent = 'Retry';
-      retry.addEventListener('click', () => selectLayer(key));
+      retry.addEventListener('click', () => selectDate(index));
       $('map-status').append(' ', retry);
       console.error(error);
     }
+    return false;
   }
 }
-
-function minimumYear() { return active.years[mode === 'trend' ? WINDOW - 1 : 0]; }
 function cellIndices(lon, lat) {
   const col = clamp(Math.floor((wrap(lon) + 180) / active.step), 0, active.width - 1);
   const row = clamp(Math.floor((90 - lat) / active.step), 0, active.height - 1);
@@ -200,12 +208,28 @@ function history(index) {
   return active.years.map((_, i) => active.values[i * active.size + index]);
 }
 function yearIndex() { return year - active.years[0]; }
-function setYear(next) {
-  if (!active) return;
-  const selected = clamp(next, minimumYear(), active.years.at(-1));
-  if (selected === year) return;
-  year = selected;
-  update(160);
+function renderTimelineTicks() {
+  const last = timeline.length - 1;
+  $('time-ticks').replaceChildren(...[0, Math.floor(last / 2), last].map(index => {
+    const {year: tickYear, period} = timeline[index];
+    const span = document.createElement('span');
+    span.textContent = dateLabel(tickYear, period);
+    return span;
+  }));
+}
+
+function updateTimeline() {
+  const label = labelForYear(year);
+  const last = timeline.length - 1;
+  const unit = mode === 'monthly' ? 'month' : mode === 'seasonal' ? 'season' : 'year';
+  Object.assign($('year'), {min: 0, max: last, value: timelineIndex});
+  $('year').setAttribute('aria-label', 'Timeline ' + unit);
+  $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : label);
+  $('year-label').value = label;
+  $('previous').disabled = timelineIndex === 0;
+  $('next').disabled = timelineIndex === last;
+  $('previous').setAttribute('aria-label', 'Previous ' + unit);
+  $('next').setAttribute('aria-label', 'Next ' + unit);
 }
 
 function update(fade = 0) {
@@ -215,19 +239,8 @@ function update(fade = 0) {
   grid = mode === 'trend'
     ? Float32Array.from({length: active.size}, (_, i) => slopeAt(active.values, idx, active.size, i) * 10)
     : climate;
-  const min = minimumYear();
-  const max = active.years.at(-1);
-  Object.assign($('year'), {min, max, value: year});
-  $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : dateLabel(year));
-  $('year-label').value = dateLabel(year);
-  $('time-ticks').replaceChildren(...[min, Math.round((min + max) / 2), max].map(tick => {
-    const span = document.createElement('span'); span.textContent = tick; return span;
-  }));
-  $('previous').disabled = year === min;
-  $('next').disabled = year === max;
-  $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : dateLabel(year);
+  $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : labelForYear(year);
   $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND' : mode.toUpperCase() + ' ANOMALY';
-  $('layer-baseline').textContent = active.years[0] + '–' + max + ' · Baseline ' + active.reference;
   $('chart-title').textContent = periodTitle() + ' anomalies';
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
@@ -400,14 +413,14 @@ function updateInspector() {
   const idx = yearIndex();
   const current = series[idx];
   const estimate = trend(series, idx);
-  $('place-name').textContent = places[placeKey]?.[0] ?? 'Selected grid cell';
+  $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
-  $('value-label').textContent = dateLabel(year) + ' anomaly';
+  $('value-label').textContent = labelForYear(year) + ' anomaly';
   setMetric($('value'), current, active.unit);
   setMetric($('slope'), estimate?.rate, active.unit);
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
-    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use the arrow keys to read values and Enter to set the map year.');
+    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use the arrow keys to read values and Enter to set the map date.');
   $('csv').disabled = !series.some(Number.isFinite);
   const hasTest = estimate?.p != null;
   $('trend-details').hidden = !hasTest;
@@ -474,7 +487,7 @@ function drawChart() {
   const left = 37, right = w - 7, top = 8, bottom = h - 20;
   chartLayout = {left, right, bottom};
   const inspected = chartCursor ?? idx;
-  const label = dateLabel(active.years[inspected]) + ' · ' + (Number.isFinite(series[inspected])
+  const label = labelForYear(active.years[inspected]) + ' · ' + (Number.isFinite(series[inspected])
     ? signed(series[inspected]) + ' ' + active.unit : 'No data');
   $('chart-readout').textContent = label;
   const tooltip = $('chart-tooltip');
@@ -553,11 +566,14 @@ function jumpToChartYear(index) {
   if (index == null || !active) return;
   const selected = active.years[index];
   stop();
-  if (mode === 'trend' && selected < minimumYear()) {
+  if (mode === 'trend' && selected < timeline[0].year) {
     mode = 'annual';
     $('mode').value = mode;
+    year = selected;
+    selectLayer(layer);
+    return;
   }
-  setYear(selected);
+  selectDate(nearestIndex(timeline, mode, selected, periodKey()));
 }
 
 chart.addEventListener('pointermove', event => inspectChart(chartIndexAt(event)));
@@ -583,20 +599,39 @@ chart.addEventListener('keydown', event => {
   }
 });
 
+let playbackRun = 0;
+
 function stop() {
-  clearInterval(timer); timer = undefined;
+  playing = false;
+  playbackRun++;
+  clearTimeout(timer);
   $('play').textContent = '▶';
   $('play').setAttribute('aria-label', 'Play timeline');
 }
+
 function play() {
-  if (!active) return;
-  if (timer) { stop(); return; }
-  if (year === active.years.at(-1)) setYear(minimumYear());
-  $('play').textContent = 'Ⅱ'; $('play').setAttribute('aria-label', 'Pause timeline');
-  timer = setInterval(() => {
-    if (year < active.years.at(-1)) setYear(year + 1);
-    if (year === active.years.at(-1)) stop();
-  }, 360);
+  if (playing) { stop(); return; }
+  if (timeline.length < 2) return;
+  playing = true;
+  const run = ++playbackRun;
+  $('play').textContent = 'Ⅱ';
+  $('play').setAttribute('aria-label', 'Pause timeline');
+
+  async function advance(index) {
+    const started = performance.now();
+    const next = timeline[index + 1];
+    if (next && next.period !== timeline[index].period) {
+      // Warm the next period while the current frame is loading or visible.
+      loadDataset(layer, next.period).catch(() => {});
+    }
+    const ready = await selectDate(index);
+    if (run !== playbackRun) return;
+    if (!ready || !next) { stop(); return; }
+    timer = setTimeout(() => advance(index + 1), Math.max(120, 360 - (performance.now() - started)));
+  }
+
+  if (timelineIndex === timeline.length - 1) advance(0);
+  else timer = setTimeout(() => advance(timelineIndex + 1), 0);
 }
 
 function rotate(x, y) {
@@ -740,7 +775,8 @@ earth.addEventListener('pointerup', event => {
   }
   const target = locationAt(event);
   if (target) {
-    point = target; placeKey = 'custom';
+    point = target; placeName = 'Selected grid cell';
+    $('place-query').value = '';
     updateInspector(); queueDraw();
   }
 });
@@ -762,7 +798,8 @@ earth.addEventListener('keydown', event => {
     event.preventDefault();
     animateCamera(rotation[0] + direction[0], clamp(rotation[1] + direction[1], -89, 89), zoom, 150);
   } else if (event.key === 'Enter') {
-    point = [-rotation[0], -rotation[1]]; placeKey = 'custom';
+    point = [-rotation[0], -rotation[1]]; placeName = 'Selected grid cell';
+    $('place-query').value = '';
     updateInspector(); queueDraw();
   }
 });
@@ -784,13 +821,120 @@ function changeView(next) {
   queueDraw(200);
 }
 
-$('place').addEventListener('change', event => {
-  const selected = event.target.value;
-  if (!selected) return;
-  event.target.value = '';
-  placeKey = selected;
-  point = places[placeKey].slice(1);
-  recenter(); updateInspector();
+function normalizePlace(query) {
+  return query.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+}
+
+function searchPlaces(query) {
+  const needle = normalizePlace(query);
+  if (!needle) {
+    return cities.filter(place => place.kind === 'region').concat(
+      cities.filter(place => place.kind !== 'region').slice(0, 12)
+    );
+  }
+  const scored = [];
+  for (const place of cities) {
+    const name = normalizePlace(place.name);
+    const region = normalizePlace(place.region || '');
+    const haystack = name + ' ' + region;
+    if (!haystack.includes(needle)) continue;
+    const score = (name.startsWith(needle) ? 0 : name.includes(needle) ? 1 : 2)
+      + (place.kind === 'region' ? -.1 : 0);
+    scored.push({place, score});
+  }
+  scored.sort((a, b) => a.score - b.score || a.place.name.localeCompare(b.place.name));
+  return scored.slice(0, 12).map(entry => entry.place);
+}
+
+function closePlaceResults() {
+  placeMatches = [];
+  placeActive = -1;
+  $('place-results').hidden = true;
+  $('place-results').replaceChildren();
+  $('place-query').setAttribute('aria-expanded', 'false');
+}
+
+function renderPlaceResults(matches) {
+  placeMatches = matches;
+  placeActive = matches.length ? 0 : -1;
+  const list = $('place-results');
+  if (!matches.length) {
+    list.replaceChildren(Object.assign(document.createElement('li'), {
+      className: 'place-empty',
+      textContent: 'No matching city. Try another name, or click the map.',
+      role: 'presentation',
+    }));
+    list.hidden = false;
+    $('place-query').setAttribute('aria-expanded', 'true');
+    return;
+  }
+  list.replaceChildren(...matches.map((place, index) => {
+    const item = document.createElement('li');
+    item.setAttribute('role', 'option');
+    item.id = 'place-option-' + index;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('aria-selected', index === placeActive ? 'true' : 'false');
+    button.innerHTML = '<span class="place-name"></span><span class="place-region"></span>';
+    button.querySelector('.place-name').textContent = place.name;
+    button.querySelector('.place-region').textContent = place.region || '';
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => goToPlace(place));
+    item.append(button);
+    return item;
+  }));
+  list.hidden = false;
+  $('place-query').setAttribute('aria-expanded', 'true');
+  $('place-query').setAttribute('aria-activedescendant', placeActive >= 0 ? 'place-option-' + placeActive : '');
+}
+
+function highlightPlace(index) {
+  if (!placeMatches.length) return;
+  placeActive = (index + placeMatches.length) % placeMatches.length;
+  for (const [i, item] of [...$('place-results').children].entries()) {
+    const button = item.querySelector('button');
+    if (button) button.setAttribute('aria-selected', i === placeActive ? 'true' : 'false');
+  }
+  $('place-query').setAttribute('aria-activedescendant', 'place-option-' + placeActive);
+  $('place-option-' + placeActive)?.scrollIntoView({block: 'nearest'});
+}
+
+function goToPlace(place) {
+  placeName = place.name;
+  point = [place.lon, place.lat];
+  $('place-query').value = place.name;
+  closePlaceResults();
+  recenter();
+  updateInspector();
+  queueDraw();
+}
+
+$('place-query').addEventListener('focus', () => {
+  renderPlaceResults(searchPlaces($('place-query').value));
+});
+$('place-query').addEventListener('input', () => {
+  renderPlaceResults(searchPlaces($('place-query').value));
+});
+$('place-query').addEventListener('keydown', event => {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if ($('place-results').hidden) renderPlaceResults(searchPlaces($('place-query').value));
+    else highlightPlace(placeActive + 1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!$('place-results').hidden) highlightPlace(placeActive - 1);
+  } else if (event.key === 'Enter') {
+    if (placeActive >= 0 && placeMatches[placeActive]) {
+      event.preventDefault();
+      goToPlace(placeMatches[placeActive]);
+    }
+  } else if (event.key === 'Escape') {
+    closePlaceResults();
+    $('place-query').blur();
+  }
+});
+$('place-query').addEventListener('blur', () => {
+  setTimeout(closePlaceResults, 120);
 });
 $('mode').addEventListener('change', event => {
   mode = event.target.value;
@@ -798,14 +942,20 @@ $('mode').addEventListener('change', event => {
   if (catalog) selectLayer(layer);
 });
 $('period').addEventListener('change', event => {
-  if (mode === 'monthly') month = event.target.value;
-  if (mode === 'seasonal') season = event.target.value;
-  if (catalog) selectLayer(layer);
+  stop();
+  const period = event.target.value;
+  const years = catalog[layer].periods[period].years;
+  const selectedYear = years.reduce((best, candidate) =>
+    Math.abs(candidate - year) < Math.abs(best - year) ? candidate : best);
+  selectDate(nearestIndex(timeline, mode, selectedYear, period));
 });
-$('year').addEventListener('input', event => { stop(); setYear(Number(event.target.value)); });
+$('year').addEventListener('input', event => {
+  stop();
+  selectDate(Number(event.target.value));
+});
 $('play').addEventListener('click', play);
-$('previous').addEventListener('click', () => { stop(); setYear(year - 1); });
-$('next').addEventListener('click', () => { stop(); setYear(year + 1); });
+$('previous').addEventListener('click', () => { stop(); selectDate(timelineIndex - 1); });
+$('next').addEventListener('click', () => { stop(); selectDate(timelineIndex + 1); });
 $('recenter').addEventListener('click', recenter);
 $('csv').addEventListener('click', () => {
   if (!active) return;
@@ -842,7 +992,9 @@ new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
 
 try {
-  [catalog, land, borders] = await Promise.all(['catalog.json', 'land.json', 'countries.json'].map(async file => (await fetchAsset(file)).json()));
+  [catalog, land, borders, cities] = await Promise.all(
+    ['catalog.json', 'land.json', 'countries.json', 'cities.json'].map(async file => (await fetchAsset(file)).json())
+  );
   d3 = window.d3;
   globe = d3.geoOrthographic().clipAngle(90);
   land = window.topojson.feature(land, land.objects.land);

@@ -19,7 +19,7 @@
     <h1>A planet in <em>change.</em></h1>
     <div class="intro-side">
       <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
-      <p>Choose a climate layer and year, then pick a place to see how it has changed.</p>
+      <p>Choose a climate layer and date, then pick a place to see how it has changed.</p>
     </div>
   </section>
   <div class="workspace">
@@ -76,17 +76,15 @@
         <h2 id="place-name">Canadian Arctic</h2>
         <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
       </div>
-      <label class="sr-only" for="place">Jump to a location</label>
-      <select id="place">
-        <option value="" selected>Jump to a location…</option>
-        <option value="arctic">Canadian Arctic</option>
-        <option value="toronto">Toronto</option>
-        <option value="pacific">Equatorial Pacific</option>
-        <option value="amazon">Central Amazon</option>
-        <option value="sahel">West African Sahel</option>
-        <option value="india">Central India</option>
-        <option value="antarctica">East Antarctica</option>
-      </select>
+      <div class="place-search">
+        <label class="sr-only" for="place-query">Search cities and regions</label>
+        <div class="place-combobox">
+          <input id="place-query" type="search" placeholder="Search a city or region…" autocomplete="off"
+            aria-autocomplete="list" aria-controls="place-results" aria-expanded="false" role="combobox">
+          <ul id="place-results" role="listbox" hidden></ul>
+        </div>
+        <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
+      </div>
       <dl class="numbers">
         <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
         <div><dt>Trend per decade</dt><dd id="slope">—</dd></div>
@@ -97,7 +95,7 @@
         <div id="chart-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <output id="chart-readout" class="sr-only" aria-live="off"></output>
-      <p id="chart-help" class="chart-help">Hover for values · Click to set year</p>
+      <p id="chart-help" class="chart-help">Hover for values · Click to set date</p>
       <span id="chart-announcement" class="sr-only" role="status"></span>
       <div class="result" id="result">
         <div class="result-head">
