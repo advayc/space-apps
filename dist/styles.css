@@ -321,3 +321,12 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .methods ol.plain li{margin-bottom:6px}
 .methods ol.plain b{color:var(--ink)}
 .methods-nav .utility+.utility{margin-left:auto}
+.source-table.hindcast th[scope=colgroup]{text-align:center;border-left:1px solid var(--line)}
+.source-table.hindcast tbody td:nth-child(3n),.source-table.hindcast thead tr:last-child th:nth-child(3n+1){border-left:1px solid var(--line)}
+.source-table.hindcast td.na{color:var(--muted);font-size:12px;text-align:center;border-left:1px solid var(--line)}
+.methods-page:has(.hindcast){width:min(1060px,100%)}
+.methods-page:has(.hindcast) .methods>section>p,.methods-page:has(.hindcast) .methods h1{max-width:72ch}
+.source-table.hindcast{font-size:12.5px}
+.source-table.hindcast th,.source-table.hindcast td{padding:8px 9px}
+.source-table.hindcast tbody th{min-width:9.5rem}
+@media(max-width:560px){.record-axis span:is([data-year="1920"],[data-year="2075"]){display:none}}

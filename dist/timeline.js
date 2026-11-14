@@ -16,7 +16,7 @@ export function dateLabel(year, period) {
 
 // The timeline continues past the last observation up to this year with
 // projected entries (flagged `projected`), except in the 30-year trend view.
-export const HORIZON = 2050;
+export const HORIZON = 2100;
 
 export function futureYears(years) {
   const last = years.at(-1);

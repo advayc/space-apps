@@ -53,10 +53,15 @@ function normalTwoSided(z) {
 //      its own noise (t = slope / standard error; no trend at all when |t| <= 1);
 //   2. year-to-year swings: the departure from the trend line of one past year,
 //      the same past year for every cell so the map keeps real spatial patterns;
-//   3. a 95% range: the Student t prediction interval, widened by BAND_SCALE
-//      because a hindcast showed the textbook interval is too narrow.
+//   3. a 95% range: the Student t prediction interval, widened by bandScale(k)
+//      because hindcasts showed the textbook interval is too narrow, and more
+//      so the further ahead it reaches (trends bend; a straight line cannot).
 const T_975 = 2.048407; // t quantile for WINDOW - 2 = 28 degrees of freedom
-export const BAND_SCALE = 1.4;
+// Widening for the k-th projected year (k = 0 is the first). Calibrated on
+// hindcasts from 8 starting years (temperature, sea surface) and 3 for the
+// other layers, so that about 95% of later measurements fall inside at every
+// lead time out to 75 years.
+export const bandScale = k => Math.min(2, 1.25 + 0.03 * k);
 
 // Which year of the window lends its departure to a given future year.
 export function residualIndex(year) {
@@ -90,7 +95,7 @@ export function forecast(values, end, steps, firstYear) {
     const x = center + k + 1;
     const value = f.mean + f.weight * f.slope * x;
     const j = residualIndex(firstYear + k);
-    const half = BAND_SCALE * T_975 * f.sigma * Math.sqrt(1 + 1 / WINDOW + x * x / spread);
+    const half = bandScale(k) * T_975 * f.sigma * Math.sqrt(1 + 1 / WINDOW + x * x / spread);
     return {value, low: value - half, high: value + half, weight: f.weight,
       sim: value + values[f.first + j] - f.mean - (j - center) * f.slope};
   });

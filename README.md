@@ -14,7 +14,7 @@ Live site: [space.advay.ca](https://space.advay.ca)
 
 1. Type a city on the landing page, or open the world map.
 2. Choose a climate layer.
-3. Move the timeline. Years after the latest data are violet: projections to 2050 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
+3. Move the timeline. Years after the latest data are violet: projections to 2100 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
 4. Read the side panel for the anomaly, trend per decade, and significance.
 5. Download the series with its trend line and projection (CSV), the fit statistics (JSON), or the chart and map (PNG).
 

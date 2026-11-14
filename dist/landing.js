@@ -72,9 +72,10 @@ function drawRecord() {
     }
   }
   const span = bars.length;
-  $('record-axis').replaceChildren(...[FIRST_YEAR, 1920, 1960, 2000, lastYear, HORIZON].map(year => {
+  $('record-axis').replaceChildren(...[FIRST_YEAR, 1920, 1960, 2000, lastYear, 2050, 2075, HORIZON].map(year => {
     const tick = document.createElement('span');
     tick.textContent = year;
+    tick.dataset.year = year;
     tick.style.left = (year - FIRST_YEAR + .5) / span * 100 + '%';
     if (year > lastYear) tick.className = 'is-projected';
     return tick;

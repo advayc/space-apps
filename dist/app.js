@@ -1,4 +1,4 @@
-import { WINDOW, BAND_SCALE, slopeAt, trend, forecast, extendGrid } from './statistics.js';
+import { WINDOW, slopeAt, trend, forecast, extendGrid } from './statistics.js';
 import { months, seasons, dateLabel, makeTimeline, nearestIndex, futureYears } from './timeline.js';
 
 const $ = id => document.getElementById(id);
@@ -1307,7 +1307,7 @@ function trendSummary() {
     },
     projection: future && {
       method: 'Trend of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued, damped by 1 - 1/t^2 when weak; ' +
-        '95% range is the Student t prediction interval (28 degrees of freedom) widened by ' + BAND_SCALE + ' after a hindcast test',
+        '95% range is the Student t prediction interval (28 degrees of freedom) widened by min(2, 1.25 + 0.03k) for the k-th projected year, calibrated on hindcasts',
       trend_weight: round(future[0].weight),
       one_possible_year: 'value plus the departure from trend of a past year in the window; this is what the map shows',
       caution: 'Statistical extrapolation of past data. Not a climate model forecast.',

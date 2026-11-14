@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="How Earth Trend Atlas projects each place to 2050: damped trend, prediction interval, and hindcast error.">
+<meta name="description" content="How Earth Trend Atlas projects each place to 2100: damped trend, a prediction interval that widens with lead time, and hindcast error out to 75 years.">
 <meta name="theme-color" content="#f2f0e9">
 <title>Projections | Earth Trend Atlas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,7 +27,7 @@
 
     <section>
       <h2>What the violet years mean</h2>
-      <p>After the last measured year, the timeline continues to 2050 in violet. Those values are statistical extrapolations from each grid cell’s own recent record. They are not climate-model output: they do not know emissions, physics, or hard limits (for example sea ice reaching zero).</p>
+      <p>After the last measured year, the timeline continues to 2100 in violet. Those values are statistical extrapolations from each grid cell’s own recent record. They are not climate-model output: they do not know emissions, physics, or hard limits (for example sea ice reaching zero).</p>
       <p>Each cell and layer is projected on its own from the most recent complete 30-year window. Monthly and seasonal maps repeat the same construction for that month or season. Cells missing any year in that window stay gray. The 30-year trend map has no projected years.</p>
     </section>
 
@@ -63,12 +63,13 @@
 
     <section>
       <h2>95% range</h2>
-      <p>The location chart shows a classical Student-\(t\) prediction interval for one future observation, widened by a fixed factor \(c = 1.4\) after a hindcast found the textbook band too narrow:</p>
+      <p>The location chart shows a classical Student-\(t\) prediction interval for one future observation, widened by a factor \(c_k\) that grows with the lead time:</p>
       $$
-      \hat{y}(h) \;\pm\; c\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
-      \qquad t_{0.975,\,28} \approx 2.048.
+      \hat{y}(h) \;\pm\; c_k\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
+      \qquad c_k = \min\bigl(2,\; 1.25 + 0.03\,k\bigr),
+      \qquad t_{0.975,\,28} \approx 2.048,
       $$
-      <p>The band grows with lead time \(h\). It still omits structural breaks, changing slopes, and dataset inhomogeneity, so treat it as a lower bound on real uncertainty.</p>
+      <p>where \(k = 0, 1, \ldots, 74\) counts projected years (2026 to 2100). The textbook interval assumes the 30-year line keeps going unchanged. Real trends bend: warming stalled in the mid-20th century and then sped up. The hindcast below found the textbook band held only 81–90% of later measurements beyond 25 years, so \(c_k\) was chosen to bring every lead time back to about 95%. It still omits structural breaks larger than any seen in the record, and dataset inhomogeneity.</p>
     </section>
 
     <section>
@@ -82,39 +83,45 @@
     </section>
 
     <section>
-      <h2>Hindcast check</h2>
-      <p>To measure error, each layer was fit on 30 years ending 25 years before the latest observed year, then projected forward and compared with measurements. “Typical miss” is the median absolute gap between \(\hat{y}\) and the measured value across cells. The no-change column is the miss from holding each cell at its 30-year mean. Bold marks the better method.</p>
+      <h2>Hindcast check, out to 75 years</h2>
+      <p>A projection to 2100 reaches 75 years past the data, so it was tested at that distance. The method was started from many past years, given only the 30 years before each one, and scored against what was later measured. Temperature and sea surface temperature have records long enough to start in 1930, 1940, 1950, 1960, 1970, 1980, 1990 and 2000 and check up to 75 years ahead. The reanalysis layers start in 1977, 1987 and 2000 and can be checked up to 48 years ahead. Precipitation and sea ice records allow one short test each.</p>
+      <p>“Miss” is the median absolute gap between \(\hat{y}\) and the measured value across all cells and starting years. “No change” is the miss from holding each cell at its 30-year mean. Bold marks the smaller miss. “Inside” is the share of measurements that fell inside the 95% range.</p>
       <div class="source-table-wrap">
-        <table class="source-table">
-          <thead><tr><th scope="col">Layer</th><th scope="col">Fitted to</th><th scope="col">Checked against</th><th scope="col">Typical miss, first 10 years</th><th scope="col">Typical miss, last 10 years</th><th scope="col">No-change guess, last 10 years</th><th scope="col">Measured values inside the 95% range</th></tr></thead>
+        <table class="source-table hindcast">
+          <thead>
+            <tr><th scope="col" rowspan="2">Layer</th><th scope="col" rowspan="2">Starting years</th><th scope="colgroup" colspan="3">1–25 years ahead</th><th scope="colgroup" colspan="3">26–50 years ahead</th><th scope="colgroup" colspan="3">51–75 years ahead</th></tr>
+            <tr><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th><th scope="col">Miss</th><th scope="col">No change</th><th scope="col">Inside</th></tr>
+          </thead>
           <tbody>
-<tr><th scope="row">Surface temperature anomaly (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.34</td><td class="better">0.52</td><td>0.77</td><td>96%</td></tr>
-<tr><th scope="row">Precipitation (mm/day)</th><td>1979–2008</td><td>2009–2025</td><td>0.19</td><td class="better">0.22</td><td>0.22</td><td>98%</td></tr>
-<tr><th scope="row">Sea surface temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.24</td><td class="better">0.37</td><td>0.56</td><td>96%</td></tr>
-<tr><th scope="row">Atmospheric water vapor (kg/m²)</th><td>1971–2000</td><td>2001–2025</td><td>0.46</td><td>0.69</td><td class="better">0.66</td><td>93%</td></tr>
-<tr><th scope="row">Sea level air pressure (hPa)</th><td>1971–2000</td><td>2001–2025</td><td>0.71</td><td>0.87</td><td class="better">0.72</td><td>97%</td></tr>
-<tr><th scope="row">Wind speed at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.21</td><td>0.30</td><td class="better">0.24</td><td>95%</td></tr>
-<tr><th scope="row">East–west wind at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.33</td><td>0.43</td><td class="better">0.35</td><td>96%</td></tr>
-<tr><th scope="row">North–south wind at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.29</td><td>0.37</td><td class="better">0.31</td><td>95%</td></tr>
-<tr><th scope="row">Total cloud cover (pp)</th><td>1971–2000</td><td>2001–2025</td><td>2.18</td><td>3.27</td><td class="better">2.86</td><td>94%</td></tr>
-<tr><th scope="row">Air temperature at 2 m (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.41</td><td class="better">0.61</td><td>0.74</td><td>96%</td></tr>
-<tr><th scope="row">Surface skin temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.42</td><td class="better">0.60</td><td>0.69</td><td>96%</td></tr>
-<tr><th scope="row">Topsoil moisture (pp)</th><td>1971–2000</td><td>2001–2025</td><td>0.25</td><td>0.36</td><td class="better">0.33</td><td>93%</td></tr>
-<tr><th scope="row">Topsoil temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.27</td><td class="better">0.49</td><td>0.72</td><td>96%</td></tr>
-<tr><th scope="row">Sea ice concentration (pp)</th><td>1982–2011</td><td>2012–2022</td><td>3.75</td><td>3.72</td><td class="better">3.69</td><td>95%</td></tr>
-<tr><th scope="row">Incoming sunlight at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.97</td><td>4.44</td><td class="better">3.77</td><td>93%</td></tr>
-<tr><th scope="row">Latent heat flux at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>3.09</td><td>4.60</td><td class="better">3.69</td><td>94%</td></tr>
-<tr><th scope="row">Sensible heat flux at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.50</td><td>4.18</td><td class="better">3.76</td><td>93%</td></tr>
-<tr><th scope="row">Outgoing longwave radiation (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.52</td><td>4.07</td><td class="better">3.36</td><td>95%</td></tr>
+<tr><th scope="row">Surface temperature anomaly (°C)</th><td>8</td><td class="better">0.38</td><td>0.40</td><td>98%</td><td>0.60</td><td class="better">0.56</td><td>97%</td><td class="better">0.78</td><td>0.79</td><td>98%</td></tr>
+<tr><th scope="row">Precipitation (mm/day)</th><td>1</td><td class="better">0.21</td><td>0.21</td><td>98%</td><td colspan="3" class="na">not enough record</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea surface temperature (°C)</th><td>8</td><td class="better">0.29</td><td>0.30</td><td>97%</td><td>0.47</td><td class="better">0.44</td><td>96%</td><td class="better">0.62</td><td>0.64</td><td>95%</td></tr>
+<tr><th scope="row">Atmospheric water vapor (kg/m²)</th><td>3</td><td>0.58</td><td class="better">0.51</td><td>97%</td><td>1.16</td><td class="better">0.63</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea level air pressure (hPa)</th><td>3</td><td>0.90</td><td class="better">0.84</td><td>98%</td><td>1.21</td><td class="better">0.96</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Wind speed at 10 m (m/s)</th><td>3</td><td>0.25</td><td class="better">0.24</td><td>97%</td><td>0.36</td><td class="better">0.30</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">East–west wind at 10 m (m/s)</th><td>3</td><td>0.39</td><td class="better">0.36</td><td>97%</td><td>0.56</td><td class="better">0.41</td><td>97%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">North–south wind at 10 m (m/s)</th><td>3</td><td>0.34</td><td class="better">0.31</td><td>97%</td><td>0.49</td><td class="better">0.35</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Total cloud cover (pp)</th><td>3</td><td>2.62</td><td class="better">2.47</td><td>97%</td><td>4.09</td><td class="better">3.12</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Air temperature at 2 m (°C)</th><td>3</td><td class="better">0.50</td><td>0.52</td><td>97%</td><td>0.89</td><td class="better">0.77</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Surface skin temperature (°C)</th><td>3</td><td class="better">0.51</td><td>0.51</td><td>96%</td><td>0.87</td><td class="better">0.73</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Topsoil moisture (pp)</th><td>3</td><td>0.31</td><td class="better">0.29</td><td>95%</td><td>0.53</td><td class="better">0.35</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Topsoil temperature (°C)</th><td>3</td><td class="better">0.36</td><td>0.38</td><td>97%</td><td>0.78</td><td class="better">0.60</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sea ice concentration (pp)</th><td>1</td><td class="better">3.72</td><td>3.76</td><td>94%</td><td colspan="3" class="na">not enough record</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Incoming sunlight at the surface (W/m²)</th><td>3</td><td>3.87</td><td class="better">3.65</td><td>96%</td><td>6.72</td><td class="better">4.56</td><td>95%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Latent heat flux at the surface (W/m²)</th><td>3</td><td>3.97</td><td class="better">3.50</td><td>95%</td><td>6.26</td><td class="better">4.13</td><td>94%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Sensible heat flux at the surface (W/m²)</th><td>3</td><td>3.35</td><td class="better">3.09</td><td>95%</td><td>5.44</td><td class="better">4.30</td><td>93%</td><td colspan="3" class="na">not enough record</td></tr>
+<tr><th scope="row">Outgoing longwave radiation (W/m²)</th><td>3</td><td class="better">3.24</td><td>3.65</td><td>97%</td><td>5.47</td><td class="better">5.05</td><td>96%</td><td colspan="3" class="na">not enough record</td></tr>
           </tbody>
         </table>
       </div>
-      <p>Temperature layers beat a no-change guess (roughly \(0.5^{\circ}\mathrm{C}\) typical miss 16–25 years out for surface temperature). Pressure, wind, cloud, moisture, sea ice, and energy layers usually do not—treat their violet years as variability sketches, not a direction of travel. Before widening, the textbook 95% interval held only about 87% of measured values; with \(c = 1.4\) it held 93–98% by layer.</p>
+      <p>Two things stand out. First, the range is reliable: across every layer and lead time, 93–98% of measurements fell inside it. Second, the central line is not much better than assuming no change, even for temperature, once results from all starting years are pooled. A 30-year line started in 1940 caught early-century warming and then overshot through the mid-century pause. One started in 1970 caught the start of rapid warming and did well. The line is only as good as the assumption that the next decades resemble the last three.</p>
+      <p>From the most recent starting point the trend did help. Fit to 1971–2000, surface temperature missed 2016–2025 by 0.52 °C against 0.77 °C for no change. Recent warming has been steady, which favours the line, but nothing in the data guarantees that continues to 2100.</p>
+      <p>Read violet years past about 2050 mainly through their range. By 2100 the 95% range for surface temperature is about ±3.6 °C in a typical grid cell (±1.9 °C to ±7.5 °C for 80% of cells). For the global average shown on the front page it is about ±0.9 °C, because averaging the whole planet cancels most of the local year-to-year noise. That width is the honest answer to what 30 years of data can say about 75 years later.</p>
     </section>
 
     <section>
       <h2>Limits</h2>
-      <p>One hindcast window is thin evidence, and reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows, \(\hat{y}\) will miss, and the interval does not include that possibility. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
+      <p>Even 8 starting years is thin evidence for 75-year leads, and those tests saw only one century of climate. Projections do not respect physical limits: a sea ice or soil moisture anomaly can project below what is physically possible. Reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows more than it did in the test period, \(\hat{y}\) will miss by more than the range allows. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
     </section>
   </article>
 </main>
