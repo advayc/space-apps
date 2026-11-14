@@ -59,10 +59,18 @@ function drawRecord() {
     rect.setAttribute('class', 'bar-range');
     rect.setAttribute('x', i + .42); rect.setAttribute('width', .16);
     rect.setAttribute('y', zero - bar.high * unit); rect.setAttribute('height', (bar.high - bar.low) * unit);
-    rect.style.animation = 'none';
     return [rect];
   });
   svg.replaceChildren(...rects, ...whiskers);
+  if (!svg.classList.contains('ranges-in')) {
+    const reveal = () => svg.classList.add('ranges-in');
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (motion) reveal();
+    else {
+      rects.at(-1).addEventListener('animationend', reveal, {once: true});
+      setTimeout(reveal, 2400);
+    }
+  }
   const span = bars.length;
   $('record-axis').replaceChildren(...[FIRST_YEAR, 1920, 1960, 2000, lastYear, HORIZON].map(year => {
     const tick = document.createElement('span');
