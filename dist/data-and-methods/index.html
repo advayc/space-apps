@@ -28,25 +28,19 @@
 <body>
 <main class="methods-page">
   <nav class="methods-nav" aria-label="Page navigation">
-    <a class="utility" href="../"><span aria-hidden="true">←</span> Back to atlas</a>
+    <a class="utility" href="../#atlas"><span aria-hidden="true">←</span> Back to atlas</a>
     <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
   </nav>
   <article class="methods">
     <h1>Data &amp; <em>methods</em></h1>
-    <section id="references">
-      <h2>References</h2>
-      <ol class="citations">
-        <li id="ref-1">[1] Hansen, J., Ruedy, R., Sato, M., &amp; Lo, K. (2010). “Global surface temperature change.” <i>Reviews of Geophysics</i>, <b>48</b>(4), RG4004. <a href="https://doi.org/10.1029/2010RG000345" target="_blank" rel="noopener">https://doi.org/10.1029/2010RG000345</a></li>
-        <li id="ref-2">[2] Lenssen, N. J. L., Schmidt, G. A., Hansen, J. E., Menne, M. J., Persin, A., Ruedy, R., &amp; Zyss, D. (2019). “Improvements in the GISTEMP uncertainty model.” <i>Journal of Geophysical Research: Atmospheres</i>, <b>124</b>(12), 6307–6326. <a href="https://doi.org/10.1029/2018JD029522" target="_blank" rel="noopener">https://doi.org/10.1029/2018JD029522</a></li>
-        <li id="ref-3">[3] Adler, R. F., Sapiano, M. R. P., Huffman, G. J., Wang, J., Gu, G., Bolvin, D., Chiu, L., Schneider, U., Becker, A., Nelkin, E., Xie, P., Ferraro, R., &amp; Shin, D.-B. (2018). “The Global Precipitation Climatology Project (GPCP) monthly analysis (New Version 2.3) and a review of 2017 global precipitation.” <i>Atmosphere</i>, <b>9</b>(4), 138. <a href="https://doi.org/10.3390/atmos9040138" target="_blank" rel="noopener">https://doi.org/10.3390/atmos9040138</a></li>
-        <li id="ref-4">[4] Huang, B., Thorne, P. W., Banzon, V. F., Boyer, T., Chepurin, G., Lawrimore, J. H., Menne, M. J., Smith, T. M., Vose, R. S., &amp; Zhang, H.-M. (2017). “Extended Reconstructed Sea Surface Temperature, Version 5 (ERSSTv5): Upgrades, validations, and intercomparisons.” <i>Journal of Climate</i>, <b>30</b>(20), 8179–8205. <a href="https://doi.org/10.1175/JCLI-D-16-0836.1" target="_blank" rel="noopener">https://doi.org/10.1175/JCLI-D-16-0836.1</a></li>
-        <li id="ref-5">[5] Kalnay, E., Kanamitsu, M., Kistler, R., Collins, W., Deaven, D., Gandin, L., Iredell, M., Saha, S., White, G., Woollen, J., Zhu, Y., Chelliah, M., Ebisuzaki, W., Higgins, W., Janowiak, J., Mo, K. C., Ropelewski, C., Wang, J., Leetmaa, A., Reynolds, R., Jenne, R., &amp; Joseph, D. (1996). “The NCEP/NCAR 40-year reanalysis project.” <i>Bulletin of the American Meteorological Society</i>, <b>77</b>(3), 437–471. <a href="https://doi.org/10.1175/1520-0477(1996)077%3C0437:TNYRP%3E2.0.CO;2" target="_blank" rel="noopener">https://doi.org/10.1175/1520-0477(1996)077&lt;0437:TNYRP&gt;2.0.CO;2</a></li>
-        <li id="ref-6">[6] Reynolds, R. W., Smith, T. M., Liu, C., Chelton, D. B., Casey, K. S., &amp; Schlax, M. G. (2007). “Daily high-resolution-blended analyses for sea surface temperature.” <i>Journal of Climate</i>, <b>20</b>(22), 5473–5496. <a href="https://doi.org/10.1175/2007JCLI1824.1" target="_blank" rel="noopener">https://doi.org/10.1175/2007JCLI1824.1</a></li>
-        <li id="ref-7">[7] Newey, W. K., &amp; West, K. D. (1987). “A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix.” <i>Econometrica</i>, <b>55</b>(3), 703–708. <a href="https://doi.org/10.2307/1913610" target="_blank" rel="noopener">https://doi.org/10.2307/1913610</a></li>
-        <li id="ref-8">[8] Natural Earth. (n.d.). “Natural Earth terms of use.” <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">https://www.naturalearthdata.com/about/terms-of-use/</a></li>
-      </ol>
-    </section>
-    <section>
+    <nav class="methods-contents" aria-label="On this page">
+      <a href="#datasets">Datasets</a>
+      <a href="#historical-averages">Historical averages</a>
+      <a href="#trend-significance">Trend significance</a>
+      <a href="#projections">Projected years</a>
+      <a href="#references">References</a>
+    </nav>
+    <section id="datasets">
       <h2>Where the data comes from</h2>
       <p><a href="https://data.giss.nasa.gov/gistemp/data_v4.html" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a><a class="cite" href="#ref-1">[1]</a><a class="cite" href="#ref-2">[2]</a> combines land and ocean observations on a 2° grid with 1,200 km smoothing. Temperature anomalies use NASA’s 1951–1980 baseline. Grid values describe a broad area, so a city label is a shortcut to its grid cell.</p>
       <p><a href="https://psl.noaa.gov/data/gridded/data.gpcp.html" target="_blank" rel="noopener">GPCP v2.3</a><a class="cite" href="#ref-3">[3]</a> satellite and gauge precipitation is provided by NOAA PSL on a 2.5° grid. Each cell’s precipitation anomaly is the change in mean daily precipitation relative to its own 1991–2020 average.</p>
@@ -58,9 +52,32 @@
       <p>Monthly anomalies compare the selected month with that same month in the reference period. Seasonal and annual means weight each month by its number of days and require every month in the period. Dec–Feb is labeled by the January and February year, so Dec–Feb 2025 starts in December 2024. The timeline steps through consecutive periods. Select two points on the location chart to compare their anomalies. The change is the end value minus the start value. The location chart follows the selected month or season across years.</p>
       <p>NASA GISTEMP supplies monthly anomalies relative to 1951–1980. For the other layers, the atlas subtracts the cell’s 1991–2020 average for the matching period. Missing cells appear in gray. Resampled layers use the nearest grid point, and the map keeps a fixed color scale across years within each view.</p>
     </section>
+    <section id="historical-averages">
+      <h2>Historical averages</h2>
+      <p>The inspector shows two averages for each selected grid cell and period. The baseline is the mean of the 30 values in 1991–2020 for the matching month, season, or year. Atlas reads it from the same source files and grid points used to calculate the anomalies. Percentage baselines are shown in percent, with their anomalies in percentage points. Temperatures supplied in kelvin are converted to Celsius for the baseline display.</p>
+      <p>For GISTEMP, NASA publishes departures from the 1951–1980 reference. The baseline shown is zero on that anomaly scale. <a href="https://data.giss.nasa.gov/gistemp/faq/abs_temp.html">NASA’s explanation of absolute temperature</a></p>
+      <p>The record average takes the arithmetic mean of the available historical anomalies for the selected period. Atlas shows the first and last available years and the number of values used. The average excludes missing values and projections, even when the timeline shows a projected date.</p>
+    </section>
     <section>
-      <h2>How trends are tested</h2>
-      <p>The trend is the least squares slope across 30 consecutive years for the period shown. The trend map uses annual values. The location panel uses the chosen month or season when a shorter period is selected. Slopes are expressed per decade. The confidence interval and two-sided p-value use a Newey–West<a class="cite" href="#ref-7">[7]</a> standard error with three annual lags and an approximate normal reference distribution. The map colors represent slope magnitude. Each significance test applies to a single cell, without adjustment for multiple comparisons. The interval describes regression uncertainty and excludes uncertainty in the input dataset.</p>
+      <h2>Comparing two places</h2>
+      <p>Atlas subtracts B from A using the selected layer, year, and period for both cells. Each anomaly is relative to that cell’s own baseline. In the 30-year trend view the difference is between slopes ending in the selected year, expressed per decade. The side-by-side historical rates use the same 30 measured years when both cells have a complete window. The confidence interval and significance test in the inspector apply to the primary cell only.</p>
+      <p>For a projected date, the location panel compares the central estimates from the two cells. The chart shows a prediction range for the primary cell when available. The map shows one possible year, so map hover values can differ from the panel. The difference is unavailable when either cell lacks a value.</p>
+    </section>
+    <section id="trend-significance">
+      <h2>How Atlas tests trend significance</h2>
+      <p>Atlas fits a least squares line to 30 consecutive historical values and reports the slope per decade. Monthly and seasonal views fit the same month or season each year. The test window ends at the selected historical date or at the latest historical year when you view a projection. The years displayed next to the result identify the window used for the test.</p>
+      <dl class="significance-guide">
+        <div>
+          <dt>p-value</dt>
+          <dd>If the true slope were zero and the test assumptions held, this is the probability of getting a test statistic at least as extreme as the one calculated. Atlas marks a result significant at 5% when its p-value is below 0.05.</dd>
+        </div>
+        <div>
+          <dt>95% confidence interval</dt>
+          <dd>The interval shows how precisely the slope was estimated, in the layer’s unit per decade. An interval spanning zero leaves room for a flat trend. For the Canadian Arctic grid cell in 1996–2025, the temperature interval runs from −0.001 to +0.799 °C per decade, with a p-value of 0.0506.</dd>
+        </div>
+      </dl>
+      <p>Atlas uses a Newey–West standard error with three annual lags to account for short-term correlation in the fit errors. It estimates the interval and two-sided p-value with a normal approximation. The interval reflects uncertainty in the fitted slope. Input data uncertainty and adjustments for testing multiple cells are outside the calculation. <a href="#ref-7">Newey and West (1987)</a></p>
+      <p>With Compare on, the test applies to place A’s slope. The two fitted rates shown elsewhere in the analysis describe how the cells changed over the same window. Map colors show the size and direction of the slope. Select two points on the chart to fit a line to a custom span.</p>
     </section>
     <section id="projections">
       <h2>Projected years</h2>
@@ -73,6 +90,19 @@
     <section>
       <h2>Credits</h2>
       <p>Coastlines and borders from <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">Natural Earth</a><a class="cite" href="#ref-8">[8]</a>.</p>
+    </section>
+    <section id="references">
+      <h2>References</h2>
+      <ol class="citations">
+        <li id="ref-1">[1] Hansen, J., Ruedy, R., Sato, M., &amp; Lo, K. (2010). “Global surface temperature change.” <i>Reviews of Geophysics</i>, <b>48</b>(4), RG4004. <a href="https://doi.org/10.1029/2010RG000345" target="_blank" rel="noopener">https://doi.org/10.1029/2010RG000345</a></li>
+        <li id="ref-2">[2] Lenssen, N. J. L., Schmidt, G. A., Hansen, J. E., Menne, M. J., Persin, A., Ruedy, R., &amp; Zyss, D. (2019). “Improvements in the GISTEMP uncertainty model.” <i>Journal of Geophysical Research: Atmospheres</i>, <b>124</b>(12), 6307–6326. <a href="https://doi.org/10.1029/2018JD029522" target="_blank" rel="noopener">https://doi.org/10.1029/2018JD029522</a></li>
+        <li id="ref-3">[3] Adler, R. F., Sapiano, M. R. P., Huffman, G. J., Wang, J., Gu, G., Bolvin, D., Chiu, L., Schneider, U., Becker, A., Nelkin, E., Xie, P., Ferraro, R., &amp; Shin, D.-B. (2018). “The Global Precipitation Climatology Project (GPCP) monthly analysis (New Version 2.3) and a review of 2017 global precipitation.” <i>Atmosphere</i>, <b>9</b>(4), 138. <a href="https://doi.org/10.3390/atmos9040138" target="_blank" rel="noopener">https://doi.org/10.3390/atmos9040138</a></li>
+        <li id="ref-4">[4] Huang, B., Thorne, P. W., Banzon, V. F., Boyer, T., Chepurin, G., Lawrimore, J. H., Menne, M. J., Smith, T. M., Vose, R. S., &amp; Zhang, H.-M. (2017). “Extended Reconstructed Sea Surface Temperature, Version 5 (ERSSTv5): Upgrades, validations, and intercomparisons.” <i>Journal of Climate</i>, <b>30</b>(20), 8179–8205. <a href="https://doi.org/10.1175/JCLI-D-16-0836.1" target="_blank" rel="noopener">https://doi.org/10.1175/JCLI-D-16-0836.1</a></li>
+        <li id="ref-5">[5] Kalnay, E., Kanamitsu, M., Kistler, R., Collins, W., Deaven, D., Gandin, L., Iredell, M., Saha, S., White, G., Woollen, J., Zhu, Y., Chelliah, M., Ebisuzaki, W., Higgins, W., Janowiak, J., Mo, K. C., Ropelewski, C., Wang, J., Leetmaa, A., Reynolds, R., Jenne, R., &amp; Joseph, D. (1996). “The NCEP/NCAR 40-year reanalysis project.” <i>Bulletin of the American Meteorological Society</i>, <b>77</b>(3), 437–471. <a href="https://doi.org/10.1175/1520-0477(1996)077%3C0437:TNYRP%3E2.0.CO;2" target="_blank" rel="noopener">https://doi.org/10.1175/1520-0477(1996)077&lt;0437:TNYRP&gt;2.0.CO;2</a></li>
+        <li id="ref-6">[6] Reynolds, R. W., Smith, T. M., Liu, C., Chelton, D. B., Casey, K. S., &amp; Schlax, M. G. (2007). “Daily high-resolution-blended analyses for sea surface temperature.” <i>Journal of Climate</i>, <b>20</b>(22), 5473–5496. <a href="https://doi.org/10.1175/2007JCLI1824.1" target="_blank" rel="noopener">https://doi.org/10.1175/2007JCLI1824.1</a></li>
+        <li id="ref-7">[7] Newey, W. K., &amp; West, K. D. (1987). “A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix.” <i>Econometrica</i>, <b>55</b>(3), 703–708. <a href="https://doi.org/10.2307/1913610" target="_blank" rel="noopener">https://doi.org/10.2307/1913610</a></li>
+        <li id="ref-8">[8] Natural Earth. (n.d.). “Natural Earth terms of use.” <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">https://www.naturalearthdata.com/about/terms-of-use/</a></li>
+      </ol>
     </section>
   </article>
 </main>

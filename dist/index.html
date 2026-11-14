@@ -38,8 +38,9 @@
     <nav class="landing-actions" aria-label="Site">
       <a class="utility" href="#how">How it works</a>
       <a class="utility" href="#sources">Data sources</a>
+      <a class="utility" href="impacts/">Impacts</a>
       <a class="utility" href="projections/">Projections</a>
-      <a class="utility" href="data-and-methods/">Methods</a>
+      <a class="utility" href="data-and-methods/">Data &amp; methods</a>
       <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
     </nav>
   </div>
@@ -76,10 +77,10 @@
 <main>
   <section class="how" id="how" aria-label="How to read the map">
     <dl class="glossary">
-      <div><dt><i class="sw sw-ramp"></i>Colors</dt><dd>Represents the difference from that place’s usual value. Dark blue means cooler/drier, bright red means hotter/wetter.</dd></div>
+      <div><dt><i class="sw sw-ramp"></i>Colors</dt><dd>The map legend shows what the colors mean for the selected layer. Zero marks the historical baseline in an anomaly view.</dd></div>
       <div><dt><i class="sw sw-fit"></i>Trend line</dt><dd>Shows the general climate trend for the years you select. With none selected, it fits the measured record.</dd></div>
-      <div><dt><i class="sw sw-sig"></i>Significant</dt><dd>There is strong statistical evidence that this location has experienced some upward or downward trend. However, this does not necessarily imply causation.</dd></div>
-      <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>Extrapolates current trends to 2100, with a range showing uncertainty ranges. Note that this is not a climate model forecast. <a href="projections/">How projections work</a>.</dd></div>
+      <div><dt><i class="sw sw-sig"></i>Significant</dt><dd>The trend meets Atlas’s 5% cutoff for evidence of change. <a href="data-and-methods/#trend-significance">How we test trends</a>.</dd></div>
+      <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>A statistical estimate that extends the recent trend to 2100. The shaded range shows how much the estimate can vary. <a href="projections/">How projections work</a>.</dd></div>
     </dl>
   </section>
   <div class="workspace" id="atlas">
@@ -97,7 +98,7 @@
         <div class="layer-source"><a id="map-source" target="_blank" rel="noopener"></a><span id="layer-baseline"></span></div>
       </div>
       <div class="map-panel">
-        <div class="map-heading">
+        <div class="map-heading" id="map-panel-heading">
           <div class="map-meta"><span id="mode-label">ANNUAL ANOMALY</span><strong id="map-year">2025</strong><em id="projected-badge" class="projected-badge" hidden>Projected: one possible year</em></div>
           <div class="map-selects">
             <label class="mode"><span class="sr-only">Map layer display</span><select id="mode">
@@ -125,69 +126,137 @@
           <button class="recenter" id="recenter" title="Center on selected location" aria-label="Center on selected location">⌖</button>
         </div>
         <div id="map-readout" class="map-readout">Hover over the map to inspect a cell.</div>
+        <div class="map-places" id="map-places" hidden>
+          <span><i class="place-symbol primary-symbol" aria-hidden="true"></i><b>A</b> <span id="map-primary"></span></span>
+          <span><i class="place-symbol comparison-symbol" aria-hidden="true"></i><b>B</b> <span id="map-comparison"></span></span>
+        </div>
       </div>
       <div class="timeline">
         <button class="play" id="play" aria-label="Play timeline">▶</button>
         <div class="timeline-track">
-          <div class="time-head"><label for="year">TIMELINE</label><output id="year-label" for="year">2025</output></div>
+          <div class="time-head">
+            <label for="year">TIMELINE</label>
+            <form class="timeline-date" id="timeline-date">
+              <span id="timeline-period" aria-hidden="true" hidden></span>
+              <label class="sr-only" for="year-entry">Jump to year</label>
+              <input id="year-entry" type="text" inputmode="numeric" maxlength="4" value="2025"
+                autocomplete="off" aria-describedby="year-entry-status" disabled>
+              <span id="timeline-projected" hidden>· projected</span>
+            </form>
+          </div>
           <div class="range-wrap">
             <div class="time-zones" id="time-zones" aria-hidden="true"><i class="zone-obs"></i><i class="zone-proj" id="zone-proj"></i></div>
             <input type="range" id="year" min="1880" max="2025" value="2025" aria-label="Timeline year">
           </div>
           <div class="time-ticks" id="time-ticks"></div>
+          <p class="year-entry-status" id="year-entry-status" role="status" hidden></p>
         </div>
         <div class="step"><button id="previous" aria-label="Previous year">‹</button><button id="next" aria-label="Next year">›</button></div>
       </div>
       <p class="timeline-note" id="timeline-note"><i class="sw sw-proj" aria-hidden="true"></i><span id="timeline-note-text">Violet years are projections: the recent trend plus typical year-to-year swings.</span> <a href="projections/">How they work and how far off they can be</a> <button class="linkish" id="jump-latest" type="button">Back to latest data</button></p>
     </section>
-    <aside class="inspector" aria-label="Location analysis">
-      <div class="location">
-        <h2 id="place-name">Canadian Arctic</h2>
-        <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
-      </div>
-      <div class="place-search">
-        <label class="sr-only" for="place-query">Search cities and regions</label>
-        <div class="place-combobox">
+    <section class="inspector" id="location-analysis" aria-labelledby="place-name">
+      <div class="analysis-header">
+        <div class="location">
+          <h2 id="place-name">Canadian Arctic</h2>
+          <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
+        </div>
+        <div class="place-search">
+          <label class="sr-only" id="place-query-label" for="place-query">Search cities and regions</label>
           <input id="place-query" type="search" placeholder="Search a city or region…" autocomplete="off"
             aria-autocomplete="list" aria-controls="place-results" aria-expanded="false" role="combobox">
           <ul id="place-results" role="listbox" hidden></ul>
+          <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
+          <div class="compare-controls">
+            <button class="utility" id="compare" type="button" aria-pressed="false">Compare</button>
+            <button class="utility" id="compare-clear" type="button" hidden>Clear comparison</button>
+          </div>
+          <p class="comparison-place" id="comparison-place" hidden><b>B</b> <span id="comparison-name"></span></p>
+          <p class="compare-hint place-hint" id="compare-hint" hidden>Search for the comparison place or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
+          <span class="sr-only" id="compare-status" role="status"></span>
         </div>
-        <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
       </div>
-      <dl class="numbers">
-        <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
-        <div><dt>Trend per decade</dt><dd id="slope">—</dd></div>
-      </dl>
-      <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3></div>
-      <div class="chart-interactive">
-        <canvas id="chart" tabindex="0" aria-label="Historical anomalies for the selected cell" aria-describedby="chart-help"></canvas>
-        <div id="chart-tooltip" class="chart-tooltip" hidden></div>
-      </div>
-      <output id="chart-readout" class="sr-only" aria-live="off"></output>
-      <p class="chart-legend" aria-hidden="true"><span><i class="lg lg-obs"></i>Measured</span><span><i class="lg lg-fit"></i>Trend line</span><span><i class="lg lg-proj"></i>Projection, with 95% range</span><span><i class="lg lg-sim"></i>One possible path</span></p>
-      <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
-      <span id="chart-announcement" class="sr-only" role="status"></span>
-      <div id="chart-interval" class="chart-interval" hidden>
-        <div class="interval-header">
-          <output id="interval-summary" aria-live="polite"></output>
-          <button id="interval-clear" class="utility" type="button">Clear</button>
+      <div class="analysis-body">
+        <section class="analysis-chart" aria-labelledby="chart-title">
+          <section class="location-values" aria-label="Selected values">
+            <h3 class="compare-period" id="compare-period" hidden></h3>
+            <dl class="numbers" id="numbers">
+              <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
+              <div id="slope-metric"><dt>Trend per decade</dt><dd id="slope">—</dd></div>
+              <div id="other-metric" hidden><dt><b>B</b> The other place</dt><dd id="other-value">—</dd></div>
+              <div id="difference-metric" hidden><dt>Difference A − B</dt><dd id="difference-value">—</dd></div>
+            </dl>
+            <p class="compare-trend" id="compare-trend" hidden></p>
+          </section>
+          <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3></div>
+          <div class="chart-interactive">
+            <canvas id="chart" tabindex="0" aria-label="Historical anomalies for the selected cell" aria-describedby="chart-help"></canvas>
+            <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+          </div>
+          <output id="chart-readout" class="sr-only" aria-live="off"></output>
+          <p class="chart-legend">
+            <span><i class="lg lg-obs" aria-hidden="true"></i><span id="chart-primary-legend">Measured</span></span>
+            <span id="chart-compare-legend" hidden><i class="lg lg-compare" aria-hidden="true"></i>B record</span>
+            <span><i class="lg lg-fit" aria-hidden="true"></i><span id="chart-fit-legend">Trend line</span></span>
+            <span id="chart-projection-legend"><i class="lg lg-proj" aria-hidden="true"></i><span id="chart-projection-text">Projection, with 95% range</span></span>
+            <span id="chart-path-legend"><i class="lg lg-sim" aria-hidden="true"></i><span id="chart-path-text">One possible path</span></span>
+            <span id="chart-compare-projection" hidden><i class="lg lg-compare lg-dash" aria-hidden="true"></i>B projection</span>
+          </p>
+          <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
+          <span id="chart-announcement" class="sr-only" role="status"></span>
+          <div id="chart-interval" class="chart-interval" hidden>
+            <div class="interval-header">
+              <output id="interval-summary" aria-live="polite"></output>
+              <button id="interval-clear" class="utility" type="button">Clear</button>
+            </div>
+            <dl id="interval-values" hidden>
+              <div><dt>Start</dt><dd id="interval-start"></dd></div>
+              <div><dt>End</dt><dd id="interval-end"></dd></div>
+              <div><dt>Change</dt><dd id="interval-change"></dd></div>
+            </dl>
+          </div>
+        </section>
+        <div class="analysis-context">
+          <section class="result" id="result" aria-labelledby="trend-title">
+            <div class="result-head">
+              <h3 id="trend-title">Trend significance</h3>
+              <span id="trend-period"></span>
+            </div>
+            <p class="trend-status" id="trend-status"></p>
+            <dl id="trend-details" hidden>
+              <div><dt>95% confidence interval</dt><dd><span id="interval"></span> <small id="trend-unit"></small></dd></div>
+              <div><dt><math><mi>p</mi></math>-value</dt><dd id="p-value"></dd></div>
+            </dl>
+            <p id="inference"></p>
+            <p id="trend-projection-note" hidden></p>
+            <a class="method-link" href="data-and-methods/#trend-significance">How to read this test <span aria-hidden="true">→</span></a>
+          </section>
+          <section class="historical-averages" id="historical-averages" aria-labelledby="averages-title" hidden>
+            <div class="averages-header">
+              <h3 id="averages-title">Historical averages</h3>
+              <a href="data-and-methods/#historical-averages">How we calculate averages</a>
+            </div>
+            <table class="averages-table">
+              <thead id="average-places" hidden>
+                <tr><td></td><th scope="col">A <span class="sr-only">This place</span></th><th scope="col">B <span class="sr-only">Comparison place</span></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row"><span id="average-period">Annual baseline</span><small id="average-reference"></small></th>
+                  <td id="average-baseline-a">—</td>
+                  <td id="average-baseline-b" hidden>—</td>
+                </tr>
+                <tr>
+                  <th scope="row">Record average anomaly</th>
+                  <td id="average-record-a">—</td>
+                  <td id="average-record-b" hidden>—</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="averages-note" id="average-baseline-note" hidden></p>
+            <p class="averages-note">Record averages use available historical values only.</p>
+          </section>
         </div>
-        <dl id="interval-values" hidden>
-          <div><dt>Start</dt><dd id="interval-start"></dd></div>
-          <div><dt>End</dt><dd id="interval-end"></dd></div>
-          <div><dt>Change</dt><dd id="interval-change"></dd></div>
-        </dl>
-      </div>
-      <div class="result" id="result">
-        <div class="result-head">
-          <h3>Is the trend meaningful?</h3>
-          <span id="trend-period"></span>
-        </div>
-        <dl id="trend-details" hidden>
-          <div><dt>Likely range (95%)</dt><dd id="interval"></dd></div>
-          <div><dt><math><mi>p</mi></math>-value</dt><dd id="p-value"></dd></div>
-        </dl>
-        <p id="inference"></p>
       </div>
       <div class="downloads">
         <h3>Download for your own analysis</h3>
@@ -199,10 +268,13 @@
         </div>
         <p class="download-source">Original data: <a id="raw-source" target="_blank" rel="noopener"></a></p>
       </div>
-    </aside>
+    </section>
   </div>
   <section class="sources" id="sources" aria-labelledby="sources-title">
-    <h2 id="sources-title">Where this data comes from</h2>
+    <div class="sources-header">
+      <h2 id="sources-title">Where this data comes from</h2>
+      <a class="utility method-link" href="data-and-methods/">Read the data &amp; methods <span aria-hidden="true">→</span></a>
+    </div>
     <p class="sources-lede">Every layer is built from a public dataset. Open the dataset’s page to read about it, or download the original file to work with it yourself.</p>
     <div class="source-current" id="source-current" aria-live="polite"></div>
     <details class="source-all">
