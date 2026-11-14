@@ -16,7 +16,9 @@ const places = {
 };
 const themes = {
   temperature: ['#3267a5', '#80b8ce', '#eeeacb', '#e28b53', '#af3a2d'],
-  precipitation: ['#a14d2c', '#d49c67', '#eeeacb', '#73b5a5', '#28786f'],
+  water: ['#a14d2c', '#d49c67', '#eeeacb', '#73b5a5', '#28786f'],
+  atmosphere: ['#80592c', '#ccaa66', '#efead4', '#9aadd7', '#4d5c9b'],
+  energy: ['#356e96', '#84b9cd', '#f1ead1', '#d99e71', '#933f3d'],
 };
 const palette = Object.fromEntries(Object.entries(themes).map(([key, colors]) => [
   key, Array.from({length: 256}, (_, i) => {
@@ -26,6 +28,10 @@ const palette = Object.fromEntries(Object.entries(themes).map(([key, colors]) =>
     return a.map((x, channel) => x + (b[channel] - x) * (fraction % 1));
   }),
 ]));
+const themeFor = data => data.group === 'Water' ? 'water'
+  : data.group === 'Atmosphere' ? 'atmosphere'
+  : data.group === 'Energy' ? 'energy' : 'temperature';
+
 function rgb(hex) {
   return hex.slice(1).match(/../g).map(channel => parseInt(channel, 16));
 }
@@ -76,9 +82,11 @@ async function selectLayer(key) {
   $('tooltip').hidden = true;
   $('map-status').hidden = false;
   $('map-status').textContent = 'Loading climate data…';
-  for (const button of document.querySelectorAll('[data-layer]')) {
-    button.setAttribute('aria-pressed', button.dataset.layer === layer);
-  }
+  const info = catalog[key];
+  $('layer-description').textContent = info.description;
+  $('map-source').textContent = info.shortSource;
+  $('map-source').href = info.source;
+  $('layer-baseline').textContent = info.years[0] + '–' + info.years.at(-1) + ' · Reference ' + info.reference;
   $('csv').disabled = true;
   try {
     const data = await loadDataset(key);
@@ -90,7 +98,13 @@ async function selectLayer(key) {
     update();
   } catch (error) {
     if (layer === key) {
-      $('map-status').textContent = 'Climate data could not load. Select the layer to retry.';
+      $('map-status').textContent = 'Climate data could not load.';
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'utility';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', () => selectLayer(key));
+      $('map-status').append(' ', retry);
       console.error(error);
     }
   }
@@ -132,12 +146,11 @@ function update() {
   $('next').disabled = year === max;
   $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : year;
   $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND' : 'ANNUAL ANOMALY';
-  $('map-source').textContent = active.agency + ' / ' + (layer === 'temperature' ? 'GISTEMP v4' : 'GPCP v2.3');
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   $('legend-min').textContent = '≤ −' + scale;
   $('legend-max').textContent = '≥ +' + scale;
-  $('ramp').style.background = 'linear-gradient(90deg,' + themes[layer].join(',') + ')';
+  $('ramp').style.background = 'linear-gradient(90deg,' + themes[themeFor(active)].join(',') + ')';
   updateInspector();
   queueDraw();
 }
@@ -160,13 +173,13 @@ function queueDraw() {
 
 function geometry() {
   const scale = Math.min(width / 2.06, height / 2.12) * zoom;
-  const cx = width * .5, cy = height * .52;
+  const cx = width * .5, cy = height * .5;
   if (view === 'globe') {
     globe.rotate(rotation).scale(scale).translate([cx, cy]);
     projection = globe;
     mapBounds = [Math.max(0, cx - scale), Math.max(0, cy - scale), Math.min(width, cx + scale), Math.min(height, cy + scale)];
   } else {
-    const mapWidth = Math.min(width - 18, (height - 126) * 2);
+    const mapWidth = Math.min(width - 18, (height - 16) * 2);
     projection = d3.geoEquirectangular().translate([cx, cy]).scale(mapWidth / (2 * Math.PI));
     mapBounds = [cx - mapWidth / 2, cy - mapWidth / 4, cx + mapWidth / 2, cy + mapWidth / 4];
   }
@@ -222,7 +235,7 @@ function drawMap() {
   }
   rasterMap ??= mapRaster();
   const {indices, shade, image} = rasterMap;
-  const colors = palette[layer];
+  const colors = palette[themeFor(active)];
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   for (let i = 0; i < indices.length; i++) {
     if (indices[i] < 0) continue;
@@ -309,9 +322,11 @@ function drawChart(series, idx, estimate) {
   const g = chart.getContext('2d');
   const [w, h] = sizeCanvas(chart);
   g.clearRect(0, 0, w, h);
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const textColor = dark ? '#b1c1b4' : '#526258';
   const observed = series.filter(Number.isFinite);
   if (!observed.length) {
-    g.font = '12px sans-serif'; g.fillStyle = '#55635a'; g.fillText('No observations for this grid cell', 5, h / 2);
+    g.font = '12px sans-serif'; g.fillStyle = textColor; g.fillText('No observations for this grid cell', 5, h / 2);
     return;
   }
   const min = Math.min(0, ...observed), max = Math.max(0, ...observed);
@@ -319,14 +334,14 @@ function drawChart(series, idx, estimate) {
   const x = i => left + i / (series.length - 1) * (right - left);
   const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
   if (estimate) {
-    g.fillStyle = '#e1eadc';
+    g.fillStyle = dark ? '#2d4135' : '#e1eadc';
     g.fillRect(x(idx - WINDOW + 1), top, x(idx) - x(idx - WINDOW + 1), bottom - top);
   }
-  g.font = '9px monospace'; g.fillStyle = '#526258';
+  g.font = '9px monospace'; g.fillStyle = textColor;
   for (const tick of [...new Set([min, 0, max])]) {
     const ty = y(tick);
     g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
-    g.strokeStyle = tick === 0 ? '#a0aa9f' : '#dde1d5'; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = tick === 0 ? '#a0aa9f' : dark ? '#384a40' : '#dde1d5'; g.lineWidth = 1; g.stroke();
     g.fillText(signed(tick, 1), 0, clamp(ty + 3, 9, bottom + 2));
   }
   g.fillText(active.years[0], left, h - 3);
@@ -338,17 +353,17 @@ function drawChart(series, idx, estimate) {
     if (connected) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
     connected = true;
   });
-  g.strokeStyle = '#2d7655'; g.lineWidth = 1.35; g.stroke();
+  g.strokeStyle = dark ? '#a6d6b8' : '#2d7655'; g.lineWidth = 1.35; g.stroke();
   if (estimate) {
     g.beginPath();
     g.moveTo(x(idx - WINDOW + 1), y(estimate.mean - estimate.slope * (WINDOW - 1) / 2));
     g.lineTo(x(idx), y(estimate.mean + estimate.slope * (WINDOW - 1) / 2));
-    g.strokeStyle = '#a7462c'; g.lineWidth = 1.5; g.stroke();
+    g.strokeStyle = dark ? '#f0a880' : '#a7462c'; g.lineWidth = 1.5; g.stroke();
   }
   g.beginPath(); g.moveTo(x(idx), top); g.lineTo(x(idx), bottom);
   g.strokeStyle = '#51675c'; g.lineWidth = 1; g.setLineDash([3, 3]); g.stroke(); g.setLineDash([]);
   if (Number.isFinite(series[idx])) {
-    g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5, 0, Math.PI * 2); g.fillStyle = '#24523e'; g.fill();
+    g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5, 0, Math.PI * 2); g.fillStyle = dark ? '#a6d6b8' : '#24523e'; g.fill();
   }
 }
 
@@ -459,7 +474,7 @@ function changeView(next) {
     ? 'Climate globe. Use arrow keys to rotate and Enter to select the center cell. Click a cell to select it.'
     : 'Flat climate map. Click a cell to select it, or use the location menu.');
   $('recenter').hidden = view === 'map';
-  $('map-hint').textContent = view === 'globe' ? 'Drag to rotate · Click to inspect' : 'Click a cell to inspect';
+  $('map').dataset.view = view;
   rasterMap = null;
   queueDraw();
 }
@@ -492,9 +507,37 @@ $('csv').addEventListener('click', () => {
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => changeView(button.dataset.view));
-for (const button of document.querySelectorAll('[data-layer]')) button.addEventListener('click', () => {
-  if (catalog) selectLayer(button.dataset.layer);
+$('layer').addEventListener('change', event => selectLayer(event.target.value));
+
+function populateLayers() {
+  const groups = new Map();
+  for (const [key, data] of Object.entries(catalog)) {
+    if (!groups.has(data.group)) {
+      const group = document.createElement('optgroup');
+      group.label = data.group;
+      groups.set(data.group, group);
+    }
+    groups.get(data.group).append(new Option(data.name, key));
+  }
+  $('layer').replaceChildren(...groups.values());
+  $('layer').value = layer;
+  $('layer').disabled = false;
+}
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const dark = theme === 'dark';
+  $('theme').setAttribute('aria-pressed', dark);
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#101816' : '#f4f3ed';
+  if (active) updateInspector();
+}
+
+$('theme').addEventListener('click', () => {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  setTheme(theme);
+  try { localStorage.setItem('atlas-theme', theme); } catch {}
 });
+setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
 new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
 
@@ -504,6 +547,7 @@ try {
   globe = d3.geoOrthographic().clipAngle(90);
   land = window.topojson.feature(land, land.objects.land);
   borders = window.topojson.mesh(borders, borders.objects.countries, (a, b) => a !== b);
+  populateLayers();
   changeView(view);
   await selectLayer(layer);
 } catch (error) {
