@@ -15,7 +15,7 @@ Live site: [space.advay.ca](https://space.advay.ca)
 1. Type a city on the landing page, or open the world map.
 2. Choose a climate layer.
 3. Drag the timeline or type a year in its date field. Years after the latest data are violet: projections to 2100 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
-4. Use **Compare** under place search to choose a second city or click a second cell on the map. The selected layer, period, and year apply to both places. Read A minus B in the panel and follow the two records on one chart. Use **Clear comparison** to return to one place.
+4. In the location analysis below the map, use **Compare** under place search to choose a second city or click a second cell on the map. The selected layer, period, and year apply to both places. Read A minus B and follow the two records on one chart. Use **Clear comparison** to return to one place.
 5. Read the trend and significance for the primary cell. When both cells have 30 consecutive years in the same window, the comparison also shows their fitted rates.
 6. Download the primary series (CSV), its fit statistics (JSON), or the chart and map (PNG).
 

@@ -571,7 +571,7 @@ function updateInspector() {
   $('chart-compare-projection').hidden = !otherFuture;
   $('chart-help').textContent = other ? 'Select two points to fit that span for A. Both records share the same scale.'
     : 'The line fits this place’s measured record. Select two points to fit that span.';
-  $('trend-title').textContent = other ? 'Is the primary trend meaningful?' : 'Is the trend meaningful?';
+  $('trend-title').textContent = other ? 'Trend significance for A' : 'Trend significance';
   $('map-primary').textContent = placeName;
   $('map-comparison').textContent = comparison?.name ?? '';
   const empty = !series.some(Number.isFinite);
@@ -581,22 +581,36 @@ function updateInspector() {
   $('trend-json').querySelector('b').textContent = other ? 'Primary trend statistics' : 'Trend statistics';
   $('map-png').disabled = false;
   const hasTest = estimate?.p != null;
+  const significant = hasTest && estimate.p < .05;
   $('trend-details').hidden = !hasTest;
   $('trend-period').textContent = estimate ? (basisYear - WINDOW + 1) + '–' + basisYear : '';
+  $('trend-status').textContent = hasTest ? (significant ? 'Significant at 5%' : 'Inconclusive at 5%') : 'Test unavailable';
+  $('trend-status').toggleAttribute('data-significant', significant);
+  $('trend-projection-note').hidden = !projectedNow || !estimate;
+  $('trend-projection-note').textContent = projectedNow && estimate
+    ? 'For a projected year, the test uses the latest ' + WINDOW + ' historical years.' : '';
   if (hasTest) {
     const low = mathNumber(estimate.low, 3);
     const high = mathNumber(estimate.high, 3);
     $('interval').replaceChildren(mathExpression(
       mathToken('mo', '['), low, mathToken('mo', ','), high, mathToken('mo', ']')
     ));
-    // The trend and interval share the anomaly's unit, per decade.
-    $('p-value').replaceChildren(estimate.p < .001
-      ? mathExpression(mathToken('mo', '<'), mathNumber(.001, 3, false))
-      : mathExpression(mathNumber(estimate.p, Math.abs(estimate.p - .05) < .001 ? 4 : 3, false)));
-    $('inference').textContent = (estimate.p < .05 ? 'Significant at 5%' : 'Not significant at 5%') +
-      (projectedNow ? '. The ' + year + ' value is an estimate built on this trend, not a measurement.' : '');
+    $('trend-unit').textContent = active.unit + '/decade';
+    const p = estimate.p;
+    const digits = Math.abs(p - .05) <= .001 ? 4 : 3;
+    const roundsToCutoff = Number(p.toFixed(digits)) === .05 && p !== .05;
+    const probability = p < .001 ? [mathToken('mo', '<'), mathNumber(.001, 3, false)]
+      : roundsToCutoff ? [mathToken('mo', significant ? '<' : '>'), mathNumber(.05, digits, false)]
+      : [mathNumber(p, digits, false)];
+    $('p-value').replaceChildren(mathExpression(...probability));
+    const direction = estimate.rate > 0 ? 'upward' : 'downward';
+    $('inference').textContent = significant
+      ? 'The p-value is below 0.05. This period shows evidence of a ' + direction + ' trend.'
+      : 'The p-value is 0.05 or higher. The data are consistent with a flat trend in this period.';
   } else {
-    $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
+    $('inference').textContent = estimate
+      ? 'The fit has too little residual variation to estimate uncertainty with this test.'
+      : 'This test needs ' + WINDOW + ' consecutive historical values for the selected period.';
   }
   updateComparisonTrend(chartData, basis, estimate?.rate);
   updateChartInterval();
@@ -906,7 +920,7 @@ function drawChart() {
   tooltip.textContent = label;
   const hasData = series.some(Number.isFinite) || other?.values.some(Number.isFinite);
   tooltip.hidden = chartCursor == null || !hasData;
-  const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark});
+  const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark, k: w >= 480 ? 1.25 : 1});
   chartLayout = {left, right, bottom};
   if (!hasData) return;
   for (const endpoint of new Set([intervalAnchor, intervalEnd])) {
