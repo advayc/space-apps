@@ -155,40 +155,47 @@
       </div>
       <p class="timeline-note" id="timeline-note"><i class="sw sw-proj" aria-hidden="true"></i><span id="timeline-note-text">Violet years are projections: the recent trend plus typical year-to-year swings.</span> <a href="projections/">How they work and how far off they can be</a> <button class="linkish" id="jump-latest" type="button">Back to latest data</button></p>
     </section>
-    <section class="inspector" id="location-analysis" aria-labelledby="place-name">
-      <div class="analysis-header">
-        <div class="location">
-          <h2 id="place-name">Canadian Arctic</h2>
-          <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
-        </div>
-        <div class="place-search">
-          <label class="sr-only" id="place-query-label" for="place-query">Search cities and regions</label>
-          <input id="place-query" type="search" placeholder="Search a city or region…" autocomplete="off"
-            aria-autocomplete="list" aria-controls="place-results" aria-expanded="false" role="combobox">
-          <ul id="place-results" role="listbox" hidden></ul>
-          <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
-          <div class="compare-controls">
-            <button class="utility" id="compare" type="button" aria-pressed="false">Compare</button>
-            <button class="utility" id="compare-clear" type="button" hidden>Clear comparison</button>
-          </div>
-          <p class="comparison-place" id="comparison-place" hidden><b>B</b> <span id="comparison-name"></span></p>
-          <p class="compare-hint place-hint" id="compare-hint" hidden>Search for the comparison place or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
-          <span class="sr-only" id="compare-status" role="status"></span>
-        </div>
+    <aside class="inspector place-panel" id="place-panel" aria-labelledby="place-name">
+      <div class="location">
+        <h2 id="place-name">Canadian Arctic</h2>
+        <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
       </div>
+      <div class="place-search">
+        <label class="sr-only" id="place-query-label" for="place-query">Search cities and regions</label>
+        <input id="place-query" type="search" placeholder="Search a city or region…" autocomplete="off"
+          aria-autocomplete="list" aria-controls="place-results" aria-expanded="false" role="combobox">
+        <ul id="place-results" role="listbox" hidden></ul>
+        <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
+        <div class="compare-controls">
+          <button class="utility" id="compare" type="button" aria-pressed="false">Compare</button>
+          <button class="utility" id="compare-clear" type="button" hidden>Clear comparison</button>
+        </div>
+        <p class="comparison-place" id="comparison-place" hidden><b>B</b> <span id="comparison-name"></span></p>
+        <p class="compare-hint place-hint" id="compare-hint" hidden>Search for the comparison place or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
+        <span class="sr-only" id="compare-status" role="status"></span>
+      </div>
+      <section class="location-values" aria-label="Selected values">
+        <h3 class="compare-period" id="compare-period" hidden></h3>
+        <dl class="numbers" id="numbers">
+          <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
+          <div id="slope-metric"><dt>Trend per decade</dt><dd id="slope">—</dd></div>
+          <div id="other-metric" hidden><dt><b>B</b> The other place</dt><dd id="other-value">—</dd></div>
+          <div id="difference-metric" hidden><dt>Difference A − B</dt><dd id="difference-value">—</dd></div>
+        </dl>
+        <p class="compare-trend" id="compare-trend" hidden></p>
+      </section>
+    </aside>
+    <section class="inspector analysis" id="location-analysis" aria-labelledby="chart-title">
       <div class="analysis-body">
         <section class="analysis-chart" aria-labelledby="chart-title">
-          <section class="location-values" aria-label="Selected values">
-            <h3 class="compare-period" id="compare-period" hidden></h3>
-            <dl class="numbers" id="numbers">
-              <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
-              <div id="slope-metric"><dt>Trend per decade</dt><dd id="slope">—</dd></div>
-              <div id="other-metric" hidden><dt><b>B</b> The other place</dt><dd id="other-value">—</dd></div>
-              <div id="difference-metric" hidden><dt>Difference A − B</dt><dd id="difference-value">—</dd></div>
-            </dl>
-            <p class="compare-trend" id="compare-trend" hidden></p>
-          </section>
-          <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3></div>
+          <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3>
+            <div class="chart-zoom" role="group" aria-label="Zoom the years">
+              <output id="zoom-range" class="zoom-range" aria-live="polite"></output>
+              <button id="zoom-out" class="utility" type="button" aria-label="Zoom out" disabled>−</button>
+              <button id="zoom-in" class="utility" type="button" aria-label="Zoom in">+</button>
+              <button id="zoom-reset" class="utility" type="button" disabled>All years</button>
+            </div>
+          </div>
           <div class="chart-interactive">
             <canvas id="chart" tabindex="0" aria-label="Historical anomalies for the selected cell" aria-describedby="chart-help"></canvas>
             <div id="chart-tooltip" class="chart-tooltip" hidden></div>
@@ -270,6 +277,23 @@
       </div>
     </section>
   </div>
+  <section class="purpose" aria-label="Why it matters and what comes next">
+    <div>
+      <h2>Why this matters</h2>
+      <p>The world’s average hides the places changing fastest. Plans for heat, water, crops and ice are made locally, so the local record is the one that counts.</p>
+      <a href="impacts/#why">Read why</a>
+    </div>
+    <div>
+      <h2>What you can do</h2>
+      <p>Compare your city with a faster-changing place, check whether its trend is significant, and share the chart or data with people who make local decisions.</p>
+      <a href="impacts/#what-you-can-do">Ways to act</a>
+    </div>
+    <div>
+      <h2>Next steps</h2>
+      <p>Emissions scenarios beside the trend projections, counts of extreme days, finer detail for cities, and links that reopen a view.</p>
+      <a href="impacts/#next-steps">See the plan</a>
+    </div>
+  </section>
   <section class="sources" id="sources" aria-labelledby="sources-title">
     <div class="sources-header">
       <h2 id="sources-title">Where this data comes from</h2>

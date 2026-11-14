@@ -53,6 +53,9 @@ let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let flatMap, flatZoom = 1, flatOffset = [0, 0];
 let chartData, chartCursor, chartLayout;
+// Visible slice of the chart in index units, or null for the whole record.
+let chartView = null;
+const MIN_CHART_SPAN = 8;
 let intervalAnchor = null, intervalEnd = null;
 let placeMatches = [], placeActive = -1;
 const chart = $('chart');
@@ -197,8 +200,9 @@ async function selectDate(index, {scrub = false} = {}) {
     return true;
   }
   active = null;
-  chartData = chartCursor = chartLayout = null;
+  chartData = chartCursor = chartLayout = chartView = null;
   clearChartInterval();
+  updateZoomControls();
   $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
   $('historical-averages').hidden = true;
   $('chart-tooltip').hidden = true;
@@ -551,6 +555,7 @@ function updateInspector() {
   const otherFuture = steps && comparison ? forecast(otherSeries, active.observed - 1, steps, active.years[active.observed]) : null;
   const other = comparison ? {index: otherIndex, values: otherSeries.concat(otherFuture?.map(f => f.value) ?? []), future: otherFuture} : null;
   chartData = {series, central, idx, index, estimate, basis, future, other};
+  updateZoomControls();
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
@@ -569,8 +574,9 @@ function updateInspector() {
   $('chart-path-text').textContent = other ? 'A possible path' : 'One possible path';
   $('chart-compare-legend').hidden = !other;
   $('chart-compare-projection').hidden = !otherFuture;
-  $('chart-help').textContent = other ? 'Select two points to fit that span for A. Both records share the same scale.'
-    : 'The line fits this place’s measured record. Select two points to fit that span.';
+  $('chart-help').textContent = (other ? 'Select two points to fit that span for A. Both records share the same scale.'
+    : 'The line fits this place’s measured record. Select two points to fit that span.') +
+    ' Zoom with + and −, a pinch, or Ctrl + scroll, then drag to move along the years.';
   $('trend-title').textContent = other ? 'Trend significance for A' : 'Trend significance';
   $('map-primary').textContent = placeName;
   $('map-comparison').textContent = comparison?.name ?? '';
@@ -812,11 +818,18 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.fillText(other ? 'No observations for either grid cell' : 'No observations for this grid cell', ox + 5 * k, oy + h / 2);
     return {left, right, bottom, top, x: () => left};
   }
-  const extremes = future ? future.flatMap(f => [f.low, f.high]) : [];
-  const min = Math.min(0, ...finite, ...extremes), max = Math.max(0, ...finite, ...extremes);
-  const x = i => left + i / (series.length - 1) * (right - left);
+  const [v0, v1] = viewRange();
+  const lo = Math.floor(v0), hi = Math.ceil(v1);
+  const inView = (value, i) => i >= lo && i <= hi && Number.isFinite(value);
+  const visible = series.filter(inView).concat((other?.values ?? []).filter(inView));
+  const extremes = future ? future.flatMap((f, i) => inView(f.value, observedCount + i) ? [f.low, f.high] : []) : [];
+  const shown = visible.length ? visible : finite;
+  const min = Math.min(0, ...shown, ...extremes), max = Math.max(0, ...shown, ...extremes);
+  const x = i => left + (i - v0) / (v1 - v0) * (right - left);
   const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
   const lastX = x(observedCount - 1);
+  g.save();
+  g.beginPath(); g.rect(left, oy, right - left, bottom - oy + 1); g.clip();
   if (future || other?.future) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
   if (interactive && intervalAnchor !== null) {
     const endpoint = intervalEnd ?? chartCursor ?? intervalAnchor;
@@ -826,21 +839,12 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.fillStyle = c.window;
     g.fillRect(x(basis - WINDOW + 1), top, x(basis) - x(basis - WINDOW + 1), bottom - top);
   }
-  g.font = 9 * k + 'px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.textAlign = 'left';
-  for (const tick of [...new Set([min, 0, max])]) {
+  const yTicks = [...new Set([min, 0, max])];
+  for (const tick of yTicks) {
     const ty = y(tick);
     g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
     g.strokeStyle = tick === 0 ? c.zero : c.grid; g.lineWidth = k; g.stroke();
-    g.fillText(signed(tick, 1), ox, clamp(ty + 3 * k, oy + 9 * k, bottom + 2 * k));
   }
-  const axisY = oy + h - 3 * k;
-  g.fillText(active.years[0], left, axisY);
-  g.textAlign = 'right'; g.fillText(active.years.at(-1), right, axisY);
-  if (future || other?.future) {
-    g.textAlign = lastX > right - 60 * k ? 'right' : 'center';
-    g.fillText(active.years[observedCount - 1], Math.min(lastX, right - 30 * k), axisY);
-  }
-  g.textAlign = 'left';
   if (future) {
     g.beginPath();
     future.forEach((f, i) => g.lineTo(x(observedCount + i), y(f.high)));
@@ -893,6 +897,31 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.strokeStyle = c.other; g.lineWidth = 1.5 * k;
     g.strokeRect(x(idx) - 3.5 * k, y(other.values[idx]) - 3.5 * k, 7 * k, 7 * k);
   }
+  g.restore();
+  g.font = 9 * k + 'px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.textAlign = 'left';
+  for (const tick of yTicks) g.fillText(signed(tick, 1), ox, clamp(y(tick) + 3 * k, oy + 9 * k, bottom + 2 * k));
+  const axisY = oy + h - 3 * k;
+  if (chartView) {
+    // Zoomed: round-number years spaced so the labels never touch.
+    const maxTicks = Math.max(2, Math.floor((right - left) / (46 * k)));
+    const step = [1, 2, 5, 10, 20, 25, 50].find(s => (v1 - v0) / s <= maxTicks) ?? 50;
+    g.textAlign = 'center';
+    for (let i = Math.ceil(v0); i <= Math.floor(v1); i++) {
+      const year = active.years[i], px = x(i);
+      if (year % step || px < left + 12 * k || px > right - 12 * k) continue;
+      g.beginPath(); g.moveTo(px, bottom); g.lineTo(px, bottom + 3 * k);
+      g.strokeStyle = c.grid; g.lineWidth = k; g.stroke();
+      g.fillText(year, px, axisY);
+    }
+  } else {
+    g.fillText(active.years[0], left, axisY);
+    g.textAlign = 'right'; g.fillText(active.years.at(-1), right, axisY);
+    if (future || other?.future) {
+      g.textAlign = lastX > right - 60 * k ? 'right' : 'center';
+      g.fillText(active.years[observedCount - 1], Math.min(lastX, right - 30 * k), axisY);
+    }
+  }
+  g.textAlign = 'left';
   return {left, right, bottom, top, x, y, c};
 }
 
@@ -923,6 +952,8 @@ function drawChart() {
   const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark, k: w >= 480 ? 1.25 : 1});
   chartLayout = {left, right, bottom};
   if (!hasData) return;
+  g.save();
+  g.beginPath(); g.rect(left, 0, right - left, h); g.clip();
   for (const endpoint of new Set([intervalAnchor, intervalEnd])) {
     if (endpoint === null) continue;
     const px = x(endpoint);
@@ -945,10 +976,13 @@ function drawChart() {
       g.strokeStyle = c.other; g.lineWidth = 1.5;
       g.strokeRect(cursorX - 4, y(other.values[inspected]) - 4, 8, 8);
     }
+    g.restore();
     tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
       0, Math.max(0, w - tooltip.offsetWidth)) + 'px';
     // Keep the value to the side of the cursor and above the x-axis labels.
     tooltip.style.top = Math.max(0, bottom - tooltip.offsetHeight - 4) + 'px';
+  } else {
+    g.restore();
   }
 }
 
@@ -956,8 +990,58 @@ function chartIndexAt(event) {
   if (!active || !chartLayout || !chartData) return null;
   const {left, right} = chartLayout;
   if (right <= left) return null;
-  const x = event.clientX - chart.getBoundingClientRect().left;
-  return Math.round(clamp((x - left) / (right - left), 0, 1) * (active.years.length - 1));
+  return Math.round(chartIndexFloat(event.clientX));
+}
+
+// Fractional index under a screen x, inside the current view.
+function chartIndexFloat(clientX) {
+  const {left, right} = chartLayout;
+  const [v0, v1] = viewRange();
+  const x = clientX - chart.getBoundingClientRect().left;
+  return v0 + clamp((x - left) / (right - left), 0, 1) * (v1 - v0);
+}
+
+function viewRange() {
+  const last = (active?.years.length ?? 2) - 1;
+  if (!chartView) return [0, last];
+  return [clamp(chartView.start, 0, last), clamp(chartView.end, 0, last)];
+}
+
+function setChartView(start, end) {
+  if (!active) return;
+  const last = active.years.length - 1;
+  const span = clamp(end - start, Math.min(MIN_CHART_SPAN, last), last);
+  if (span >= last - 1e-6) {
+    chartView = null;
+  } else {
+    const from = clamp(start, 0, last - span);
+    chartView = {start: from, end: from + span};
+  }
+  updateZoomControls();
+  drawChart();
+}
+
+// Zoom by `factor` (<1 zooms in) keeping `anchor` (an index) under the same pixel.
+function zoomChart(factor, anchor) {
+  const [v0, v1] = viewRange();
+  const at = anchor ?? (chartCursor ?? (v0 + v1) / 2);
+  const t = v1 > v0 ? (at - v0) / (v1 - v0) : .5;
+  const span = (v1 - v0) * factor;
+  setChartView(at - t * span, at - t * span + span);
+}
+
+function panChart(deltaIndex) {
+  if (!chartView) return;
+  setChartView(chartView.start + deltaIndex, chartView.end + deltaIndex);
+}
+
+function updateZoomControls() {
+  const last = (active?.years.length ?? 2) - 1;
+  const [v0, v1] = viewRange();
+  $('zoom-in').disabled = !active || v1 - v0 <= Math.min(MIN_CHART_SPAN, last) + 1e-6;
+  $('zoom-out').disabled = $('zoom-reset').disabled = !chartView;
+  $('zoom-range').textContent = chartView && active
+    ? active.years[Math.ceil(v0)] + '–' + active.years[Math.floor(v1)] : '';
 }
 
 function inspectChart(index, announce = false) {
@@ -1012,10 +1096,76 @@ $('interval-clear').addEventListener('click', () => {
   chart.focus();
   drawChart();
 });
-chart.addEventListener('pointermove', event => inspectChart(chartIndexAt(event)));
+// Drag sideways to pan a zoomed chart; pinch with two fingers to zoom.
+const chartPointers = new Map();
+let chartGesture = null, chartDragged = false;
+chart.addEventListener('pointerdown', event => {
+  if (!chartLayout || !active) return;
+  chartPointers.set(event.pointerId, event.clientX);
+  chartDragged = false;
+  if (chartPointers.size === 2) {
+    const [a, b] = [...chartPointers.values()];
+    chartGesture = {pinch: true, distance: Math.abs(a - b) || 1, view: viewRange(),
+      anchor: chartIndexFloat((a + b) / 2)};
+  } else {
+    chartGesture = {pinch: false, x: event.clientX, view: viewRange()};
+  }
+});
+chart.addEventListener('pointermove', event => {
+  if (chartPointers.has(event.pointerId) && chartGesture && chartLayout) {
+    chartPointers.set(event.pointerId, event.clientX);
+    const [v0, v1] = chartGesture.view;
+    const perPixel = (v1 - v0) / (chartLayout.right - chartLayout.left);
+    if (chartGesture.pinch && chartPointers.size === 2) {
+      const [a, b] = [...chartPointers.values()];
+      const factor = chartGesture.distance / (Math.abs(a - b) || 1);
+      const {anchor} = chartGesture, t = (anchor - v0) / (v1 - v0), span = (v1 - v0) * factor;
+      chartDragged = true;
+      setChartView(anchor - t * span, anchor - t * span + span);
+      return;
+    }
+    const dx = event.clientX - chartGesture.x;
+    if (!chartGesture.pinch && chartView && (chartDragged || Math.abs(dx) > 4)) {
+      if (!chartDragged) chart.setPointerCapture(event.pointerId);
+      chartDragged = true;
+      chart.classList.add('panning');
+      setChartView(v0 - dx * perPixel, v1 - dx * perPixel);
+      return;
+    }
+  }
+  inspectChart(chartIndexAt(event));
+});
+const endChartPointer = event => {
+  chartPointers.delete(event.pointerId);
+  if (!chartPointers.size) { chartGesture = null; chart.classList.remove('panning'); }
+};
+chart.addEventListener('pointerup', endChartPointer);
+chart.addEventListener('pointercancel', endChartPointer);
+chart.addEventListener('wheel', event => {
+  if (!chartLayout || !active) return;
+  const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
+  if (event.ctrlKey || event.metaKey) {
+    // Trackpad pinch arrives as ctrl+wheel.
+    event.preventDefault();
+    zoomChart(Math.exp(clamp(event.deltaY, -60, 60) * .01), chartIndexFloat(event.clientX));
+  } else if (sideways && chartView) {
+    event.preventDefault();
+    const [v0, v1] = viewRange();
+    const delta = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
+    panChart(delta * (v1 - v0) / (chartLayout.right - chartLayout.left));
+  }
+}, {passive: false});
+chart.addEventListener('dblclick', event => {
+  event.preventDefault();
+  if (chartView) setChartView(0, Infinity);
+});
+$('zoom-in').addEventListener('click', () => zoomChart(.6));
+$('zoom-out').addEventListener('click', () => zoomChart(1 / .6));
+$('zoom-reset').addEventListener('click', () => setChartView(0, Infinity));
 chart.addEventListener('pointerleave', () => inspectChart(null));
 chart.addEventListener('blur', () => inspectChart(null));
 chart.addEventListener('click', event => {
+  if (chartDragged) { chartDragged = false; return; }
   const index = chartIndexAt(event);
   inspectChart(index);
   selectChartPoint(index);
@@ -1026,7 +1176,22 @@ chart.addEventListener('keydown', event => {
   const next = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: active.years.length - 1};
   if (Object.hasOwn(next, event.key)) {
     event.preventDefault();
-    inspectChart(clamp(next[event.key], 0, active.years.length - 1), true);
+    const target = clamp(next[event.key], 0, active.years.length - 1);
+    const [v0, v1] = viewRange();
+    if (chartView && (target < v0 || target > v1)) {
+      const span = v1 - v0;
+      setChartView(target < v0 ? target : target - span, target < v0 ? target + span : target);
+    }
+    inspectChart(target, true);
+  } else if (event.key === '+' || event.key === '=') {
+    event.preventDefault();
+    zoomChart(.6);
+  } else if (event.key === '-' || event.key === '_') {
+    event.preventDefault();
+    zoomChart(1 / .6);
+  } else if (event.key === '0') {
+    event.preventDefault();
+    setChartView(0, Infinity);
   } else if (event.key === 'Enter') {
     event.preventDefault();
     selectChartPoint(index);
