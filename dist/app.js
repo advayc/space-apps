@@ -18,6 +18,7 @@ const themes = {
   temperature: ['#3267a5', '#80b8ce', '#eeeacb', '#e28b53', '#af3a2d'],
   water: ['#a14d2c', '#d49c67', '#eeeacb', '#73b5a5', '#28786f'],
   atmosphere: ['#80592c', '#ccaa66', '#efead4', '#9aadd7', '#4d5c9b'],
+  land: ['#a25836', '#cc9c6a', '#f0ead4', '#8bbab7', '#326b81'],
   energy: ['#356e96', '#84b9cd', '#f1ead1', '#d99e71', '#933f3d'],
 };
 const palette = Object.fromEntries(Object.entries(themes).map(([key, colors]) => [
@@ -30,7 +31,8 @@ const palette = Object.fromEntries(Object.entries(themes).map(([key, colors]) =>
 ]));
 const themeFor = data => data.group === 'Water' ? 'water'
   : data.group === 'Atmosphere' ? 'atmosphere'
-  : data.group === 'Energy' ? 'energy' : 'temperature';
+  : data.group === 'Energy' ? 'energy'
+  : data.group === 'Land & ice' ? 'land' : 'temperature';
 
 function rgb(hex) {
   return hex.slice(1).match(/../g).map(channel => parseInt(channel, 16));
@@ -40,7 +42,44 @@ let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'globe', mode = 'annual', year = 2025;
 let rotation = [93, -46], zoom = 1, placeKey = 'arctic', point = places.arctic.slice(1);
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
+let chartData, chartCursor, chartLayout;
+const chart = $('chart');
 const datasets = new Map();
+const months = new Map([
+  ['01', 'January'], ['02', 'February'], ['03', 'March'], ['04', 'April'],
+  ['05', 'May'], ['06', 'June'], ['07', 'July'], ['08', 'August'],
+  ['09', 'September'], ['10', 'October'], ['11', 'November'], ['12', 'December'],
+]);
+const seasons = new Map([['djf', 'Dec–Feb'], ['mam', 'Mar–May'], ['jja', 'Jun–Aug'], ['son', 'Sep–Nov']]);
+let month = '01', season = 'djf', loadVersion = 0;
+let mapHover = null;
+
+function periodKey() {
+  if (mode === 'monthly') return month;
+  if (mode === 'seasonal') return season;
+  return 'annual';
+}
+
+function periodTitle() {
+  return months.get(periodKey()) ?? seasons.get(periodKey()) ?? 'Annual';
+}
+
+function dateLabel(y) {
+  const prefix = mode === 'monthly' ? months.get(month).slice(0, 3)
+    : mode === 'seasonal' ? seasons.get(season) : '';
+  return prefix ? prefix + ' ' + y : String(y);
+}
+
+function refreshPeriodControl() {
+  const subannual = mode === 'monthly' || mode === 'seasonal';
+  $('period-control').hidden = !subannual;
+  if (subannual) {
+    const choices = mode === 'monthly' ? months : seasons;
+    $('period-label').textContent = mode === 'monthly' ? 'Month' : 'Season';
+    $('period').replaceChildren(...Array.from(choices, ([key, label]) => new Option(label, key)));
+    $('period').value = periodKey();
+  }
+}
 const clamp = (x, min, max) => Math.min(max, Math.max(min, x));
 const wrap = lon => ((lon + 180) % 360 + 360) % 360 - 180;
 const signed = (x, digits = 2) => {
@@ -53,51 +92,76 @@ async function fetchAsset(file) {
   if (!response.ok) throw new Error(file + ': HTTP ' + response.status);
   return response;
 }
-async function loadDataset(key) {
-  if (!datasets.has(key)) {
-    const request = (async () => {
-      const info = catalog[key];
-      const response = await fetchAsset(info.file);
-      const bytes = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-      const expected = info.width * info.height * info.years.length;
-      if (bytes.byteLength !== 4 * expected) throw new Error('Data size mismatch');
-      // Decode the explicit little-endian format even on a big-endian host.
-      const values = new Float32Array(bytes);
-      if (new Uint8Array(new Uint16Array([1]).buffer)[0] !== 1) {
-        const decoded = new DataView(bytes);
-        for (let i = 0; i < values.length; i++) values[i] = decoded.getFloat32(4 * i, true);
-      }
-      return { ...info, values, size: info.width * info.height };
-    })().catch(error => { datasets.delete(key); throw error; });
-    datasets.set(key, request);
+async function loadDataset(key, period) {
+  const cacheKey = key + ':' + period;
+  const existing = datasets.get(cacheKey);
+  if (existing) {
+    datasets.delete(cacheKey);
+    datasets.set(cacheKey, existing);
+    return existing;
   }
-  return datasets.get(key);
+  const request = (async () => {
+    const info = catalog[key];
+    const entry = period === 'annual' ? info : info.periods[period];
+    const response = await fetchAsset(entry.file);
+    const bytes = await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    const expected = info.width * info.height * entry.years.length;
+    const packed = entry.precision != null;
+    if (bytes.byteLength !== (packed ? 2 : 4) * expected) throw new Error('Data size mismatch');
+
+    const decoded = new DataView(bytes);
+    let values;
+    if (packed) {
+      values = new Float32Array(expected);
+      for (let i = 0; i < expected; i++) {
+        const value = decoded.getInt16(2 * i, true);
+        values[i] = value === -32768 ? NaN : value * entry.precision;
+      }
+    } else {
+      values = new Float32Array(bytes);
+      if (new Uint8Array(new Uint16Array([1]).buffer)[0] !== 1) {
+        for (let i = 0; i < expected; i++) values[i] = decoded.getFloat32(4 * i, true);
+      }
+    }
+    return { ...info, years: entry.years, values, size: info.width * info.height };
+  })().catch(error => {
+    if (datasets.get(cacheKey) === request) datasets.delete(cacheKey);
+    throw error;
+  });
+  datasets.set(cacheKey, request);
+  if (datasets.size > 8) datasets.delete(datasets.keys().next().value);
+  return request;
 }
 
 async function selectLayer(key) {
   stop();
+  const version = ++loadVersion;
   layer = key;
   active = null;
-  window.clearTimeout(hoverTimer);
-  $('tooltip').hidden = true;
+  chartData = chartCursor = chartLayout = null;
+  $('chart-tooltip').hidden = true;
+  $('chart-readout').textContent = '';
+  chart.getContext('2d').clearRect(0, 0, chart.width, chart.height);
+  mapHover = null;
+  updateMapReadout();
   $('map-status').hidden = false;
   $('map-status').textContent = 'Loading climate data…';
   const info = catalog[key];
   $('layer-description').textContent = info.description;
   $('map-source').textContent = info.shortSource;
   $('map-source').href = info.source;
-  $('layer-baseline').textContent = info.years[0] + '–' + info.years.at(-1) + ' · Reference ' + info.reference;
+  $('layer-baseline').textContent = '';
   $('csv').disabled = true;
   try {
-    const data = await loadDataset(key);
-    if (layer !== key) return;
+    const data = await loadDataset(key, periodKey());
+    if (version !== loadVersion) return;
     active = data;
     rasterMap = null;
     year = clamp(year, minimumYear(), active.years.at(-1));
     $('map-status').hidden = true;
     update();
   } catch (error) {
-    if (layer === key) {
+    if (version === loadVersion) {
       $('map-status').textContent = 'Climate data could not load.';
       const retry = document.createElement('button');
       retry.type = 'button';
@@ -137,15 +201,18 @@ function update() {
   const min = minimumYear();
   const max = active.years.at(-1);
   Object.assign($('year'), {min, max, value: year});
-  $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : String(year));
-  $('year-label').value = year;
+  $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : dateLabel(year));
+  $('year-label').value = dateLabel(year);
   $('time-ticks').replaceChildren(...[min, Math.round((min + max) / 2), max].map(tick => {
     const span = document.createElement('span'); span.textContent = tick; return span;
   }));
   $('previous').disabled = year === min;
   $('next').disabled = year === max;
-  $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : year;
-  $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND' : 'ANNUAL ANOMALY';
+  $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : dateLabel(year);
+  $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND' : mode.toUpperCase() + ' ANOMALY';
+  $('layer-baseline').textContent = active.years[0] + '–' + max + ' · Baseline ' + active.reference;
+  $('chart-title').textContent = periodTitle() + ' anomalies';
+  updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   $('legend-min').textContent = '≤ −' + scale;
@@ -289,12 +356,12 @@ function updateInspector() {
   $('place-name').textContent = places[placeKey]?.[0] ?? 'Selected grid cell';
   $('coordinates').textContent = coords(center) + ' · cell center';
   $('resolution').textContent = active.step + '° GRID';
-  $('value-label').textContent = year + ' ANOMALY';
+  $('value-label').textContent = dateLabel(year) + ' anomaly';
   setMetric($('value'), current, active.unit);
   setMetric($('slope'), estimate?.rate, active.unit + ' / decade');
   $('chart-period').textContent = active.years[0] + '–' + active.years.at(-1);
-  $('chart').setAttribute('aria-label', 'Annual anomalies in ' + active.unit + ' for ' + coords(center) +
-    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Data available as CSV.');
+  $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
+    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use the arrow keys to read values and Enter to set the map year.');
   $('csv').disabled = !series.some(Number.isFinite);
   if (estimate?.p != null) {
     $('inference').textContent = estimate.p < .05 ? 'SIGNIFICANT AT 5% · LOCAL TEST' : 'NOT SIGNIFICANT AT 5%';
@@ -305,9 +372,10 @@ function updateInspector() {
     $('inference').textContent = 'TREND TEST UNAVAILABLE';
     $('interval').textContent = estimate
       ? 'The regression residuals are too small to estimate uncertainty.'
-      : 'The trend needs 30 consecutive annual observations ending in ' + year + '.';
+      : 'The trend needs 30 consecutive years of data for this period, ending in ' + year + '.';
   }
-  drawChart(series, idx, estimate);
+  chartData = {series, idx, estimate};
+  drawChart();
 }
 
 function setMetric(element, value, unit) {
@@ -317,20 +385,29 @@ function setMetric(element, value, unit) {
   element.append(small);
 }
 
-function drawChart(series, idx, estimate) {
-  const chart = $('chart');
+function drawChart() {
+  if (!active || !chartData) return;
+  const {series, idx, estimate} = chartData;
   const g = chart.getContext('2d');
   const [w, h] = sizeCanvas(chart);
   g.clearRect(0, 0, w, h);
   const dark = document.documentElement.dataset.theme === 'dark';
   const textColor = dark ? '#b1c1b4' : '#526258';
   const observed = series.filter(Number.isFinite);
+  const left = 37, right = w - 7, top = 8, bottom = h - 20;
+  chartLayout = {left, right, bottom};
+  const inspected = chartCursor ?? idx;
+  const label = dateLabel(active.years[inspected]) + ' · ' + (Number.isFinite(series[inspected])
+    ? signed(series[inspected]) + ' ' + active.unit : 'No data');
+  $('chart-readout').textContent = label;
+  const tooltip = $('chart-tooltip');
+  tooltip.textContent = label;
+  tooltip.hidden = chartCursor == null || !observed.length;
   if (!observed.length) {
     g.font = '12px sans-serif'; g.fillStyle = textColor; g.fillText('No observations for this grid cell', 5, h / 2);
     return;
   }
   const min = Math.min(0, ...observed), max = Math.max(0, ...observed);
-  const left = 34, right = w - 6, top = 6, bottom = h - 20;
   const x = i => left + i / (series.length - 1) * (right - left);
   const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
   if (estimate) {
@@ -365,7 +442,69 @@ function drawChart(series, idx, estimate) {
   if (Number.isFinite(series[idx])) {
     g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5, 0, Math.PI * 2); g.fillStyle = dark ? '#a6d6b8' : '#24523e'; g.fill();
   }
+  if (chartCursor != null) {
+    const cursorX = x(inspected);
+    g.beginPath(); g.moveTo(cursorX, top); g.lineTo(cursorX, bottom);
+    g.strokeStyle = textColor; g.lineWidth = 1; g.stroke();
+    if (Number.isFinite(series[inspected])) {
+      g.beginPath(); g.arc(cursorX, y(series[inspected]), 4.5, 0, Math.PI * 2);
+      g.fillStyle = dark ? '#e8eee4' : '#244e3d'; g.fill();
+    }
+    tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
+      0, Math.max(0, w - tooltip.offsetWidth)) + 'px';
+    // Keep the value to the side of the cursor and above the x-axis labels.
+    tooltip.style.top = Math.max(0, bottom - tooltip.offsetHeight - 4) + 'px';
+  }
 }
+
+function chartIndexAt(event) {
+  if (!active || !chartLayout || !chartData) return null;
+  const {left, right} = chartLayout;
+  if (right <= left) return null;
+  const x = event.clientX - chart.getBoundingClientRect().left;
+  return Math.round(clamp((x - left) / (right - left), 0, 1) * (active.years.length - 1));
+}
+
+function inspectChart(index, announce = false) {
+  if (index === chartCursor) return;
+  chartCursor = index;
+  drawChart();
+  if (announce) $('chart-announcement').textContent = $('chart-readout').textContent;
+}
+
+function jumpToChartYear(index) {
+  if (index == null || !active) return;
+  const selected = active.years[index];
+  stop();
+  if (mode === 'trend' && selected < minimumYear()) {
+    mode = 'annual';
+    $('mode').value = mode;
+  }
+  setYear(selected);
+}
+
+chart.addEventListener('pointermove', event => inspectChart(chartIndexAt(event)));
+chart.addEventListener('pointerleave', () => inspectChart(null));
+chart.addEventListener('blur', () => inspectChart(null));
+chart.addEventListener('click', event => {
+  const index = chartIndexAt(event);
+  inspectChart(index);
+  jumpToChartYear(index);
+});
+chart.addEventListener('keydown', event => {
+  if (!active) return;
+  const index = chartCursor ?? yearIndex();
+  const next = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: active.years.length - 1};
+  if (Object.hasOwn(next, event.key)) {
+    event.preventDefault();
+    inspectChart(clamp(next[event.key], 0, active.years.length - 1), true);
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    jumpToChartYear(index);
+  } else if (event.key === 'Escape') {
+    inspectChart(null);
+  }
+});
 
 function stop() {
   clearInterval(timer); timer = undefined;
@@ -400,15 +539,27 @@ function locationAt(event) {
   const [cx, cy] = projection.translate();
   if (view === 'globe' && Math.hypot(x - cx, y - cy) > projection.scale()) return null;
   const location = projection.invert([x, y]);
-  return location?.every(Number.isFinite) ? {location, x, y} : null;
+  return location?.every(Number.isFinite) ? location : null;
 }
 
-let hoverTimer;
+function updateMapReadout() {
+  const output = $('map-readout');
+  if (!active || !grid || !mapHover) {
+    output.textContent = 'Hover over the map to inspect a cell.';
+    return;
+  }
+  const {index, center} = cell(mapHover);
+  const value = grid[index];
+  output.textContent = coords(center) + ' · ' + (Number.isFinite(value)
+    ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : '')
+    : 'No data');
+}
 earth.addEventListener('pointerdown', event => {
   if (event.button !== 0) return;
   drag = {x: event.clientX, y: event.clientY, moved: false, rotation};
   earth.setPointerCapture(event.pointerId);
-  $('tooltip').hidden = true;
+  mapHover = null;
+  updateMapReadout();
 });
 earth.addEventListener('pointermove', event => {
   if (drag) {
@@ -420,34 +571,21 @@ earth.addEventListener('pointermove', event => {
     }
     return;
   }
-  clearTimeout(hoverTimer);
-  const target = locationAt(event);
-  $('tooltip').hidden = true;
-  if (!target || event.pointerType !== 'mouse') return;
-  hoverTimer = setTimeout(() => {
-    if (!active || !grid || drag) return;
-    const {index, center} = cell(target.location);
-    const value = grid[index];
-    const tooltip = $('tooltip');
-    tooltip.textContent = coords(center) + '  |  ' + (Number.isFinite(value)
-      ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : '') : 'No data');
-    tooltip.hidden = false;
-    tooltip.style.left = clamp(target.x + 10, 4, Math.max(4, width - tooltip.offsetWidth - 5)) + 'px';
-    tooltip.style.top = clamp(target.y + 12, 4, height - tooltip.offsetHeight - 5) + 'px';
-  }, 170);
+  mapHover = event.pointerType === 'mouse' ? locationAt(event) : null;
+  updateMapReadout();
 });
 earth.addEventListener('pointerup', event => {
   if (drag && !drag.moved) {
     const target = locationAt(event);
     if (target) {
-      point = target.location; placeKey = 'custom'; $('place').value = placeKey;
+      point = target; placeKey = 'custom'; $('place').value = placeKey;
       updateInspector(); queueDraw();
     }
   }
   drag = null; earth.classList.remove('dragging');
 });
 earth.addEventListener('lostpointercapture', () => { drag = null; earth.classList.remove('dragging'); });
-earth.addEventListener('pointerleave', () => { clearTimeout(hoverTimer); $('tooltip').hidden = true; });
+earth.addEventListener('pointerleave', () => { mapHover = null; updateMapReadout(); });
 earth.addEventListener('wheel', event => {
   if (view !== 'globe' || document.activeElement !== earth) return;
   event.preventDefault();
@@ -468,6 +606,8 @@ earth.addEventListener('keydown', event => {
 
 function changeView(next) {
   view = next;
+  mapHover = null;
+  updateMapReadout();
   for (const button of document.querySelectorAll('[data-view]')) button.setAttribute('aria-pressed', button.dataset.view === view);
   earth.classList.toggle('grab', view === 'globe');
   earth.setAttribute('aria-label', view === 'globe'
@@ -485,25 +625,30 @@ $('place').addEventListener('change', event => {
   recenter(); updateInspector();
 });
 $('mode').addEventListener('change', event => {
-  stop(); mode = event.target.value;
-  if (active) setYear(year);
+  mode = event.target.value;
+  refreshPeriodControl();
+  if (catalog) selectLayer(layer);
+});
+$('period').addEventListener('change', event => {
+  if (mode === 'monthly') month = event.target.value;
+  if (mode === 'seasonal') season = event.target.value;
+  if (catalog) selectLayer(layer);
 });
 $('year').addEventListener('input', event => { stop(); setYear(Number(event.target.value)); });
 $('play').addEventListener('click', play);
 $('previous').addEventListener('click', () => { stop(); setYear(year - 1); });
 $('next').addEventListener('click', () => { stop(); setYear(year + 1); });
 $('recenter').addEventListener('click', recenter);
-$('open-method').addEventListener('click', () => $('methods').showModal());
 $('csv').addEventListener('click', () => {
   if (!active) return;
   const {index, center} = cell(point);
   const series = history(index);
-  const rows = ['year,anomaly,unit,latitude,longitude,baseline,product',
+  const rows = ['year,anomaly,unit,latitude,longitude,baseline,product,period',
     ...active.years.map((y, i) => [y, Number.isFinite(series[i]) ? series[i].toFixed(5) : '',
-      active.unit, center[1], center[0], active.reference, active.product].join(','))];
+      active.unit, center[1], center[0], active.reference, active.product, periodKey()].join(','))];
   const url = URL.createObjectURL(new Blob([rows.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'}));
   const link = document.createElement('a');
-  link.href = url; link.download = layer + '-' + center[1] + '-' + center[0] + '.csv';
+  link.href = url; link.download = layer + '-' + periodKey() + '-' + center[1] + '-' + center[0] + '.csv';
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => changeView(button.dataset.view));
@@ -524,20 +669,7 @@ function populateLayers() {
   $('layer').disabled = false;
 }
 
-function setTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  const dark = theme === 'dark';
-  $('theme').setAttribute('aria-pressed', dark);
-  document.querySelector('meta[name="theme-color"]').content = dark ? '#101816' : '#f4f3ed';
-  if (active) updateInspector();
-}
-
-$('theme').addEventListener('click', () => {
-  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  setTheme(theme);
-  try { localStorage.setItem('atlas-theme', theme); } catch {}
-});
-setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+document.addEventListener('atlas-theme-change', () => { if (active) updateInspector(); });
 new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
 

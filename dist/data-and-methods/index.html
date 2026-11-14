@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The data sources and statistical methods behind Earth Trend Atlas.">
+<meta name="theme-color" content="#f4f3ed">
+<title>Data &amp; methods | Earth Trend Atlas</title>
+<script src="../theme.js"></script>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main class="methods-page">
+  <nav class="methods-nav" aria-label="Page navigation">
+    <a class="utility" href="../"><span aria-hidden="true">←</span> Back to atlas</a>
+    <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
+  </nav>
+  <article class="methods">
+    <h1>Data &amp; <em>methods</em></h1>
+    <section>
+      <h2>Where the data come from</h2>
+      <p><a href="https://data.giss.nasa.gov/gistemp/data_v4.html" target="_blank" rel="noopener">NASA GISS GISTEMP v4</a> combines land and ocean observations on a 2° grid with 1,200 km smoothing. Temperature anomalies use NASA’s 1951–1980 baseline. Grid values describe a broad area, so a city label is a shortcut to its grid cell.</p>
+      <p><a href="https://psl.noaa.gov/data/gridded/data.gpcp.html" target="_blank" rel="noopener">GPCP v2.3</a> satellite and gauge precipitation is provided by NOAA PSL on a 2.5° grid. Each cell’s precipitation anomaly is the change in mean daily precipitation relative to its own 1991–2020 average.</p>
+      <p><a href="https://psl.noaa.gov/data/gridded/data.noaa.ersst.v6.html" target="_blank" rel="noopener">NOAA ERSST v6</a> reconstructs sea surface temperatures from marine observations. <a href="https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html" target="_blank" rel="noopener">NCEP/NCAR Reanalysis 1</a> combines observations with a weather model to estimate air and surface temperature, pressure, water vapor, wind, clouds, soil conditions, surface heat flux, and radiation. The reanalysis stopped in 2026, and changes in the observing network can affect trends.</p>
+      <p><a href="https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.html" target="_blank" rel="noopener">NOAA OISST v2</a> provides the monthly sea ice concentration archive. The atlas uses complete years through 2022. Soil moisture and sea ice anomalies are measured in percentage points.</p>
+    </section>
+    <section>
+      <h2>Monthly, seasonal, and annual anomalies</h2>
+      <p>Monthly anomalies compare the selected month with that same month in the reference period. Seasonal and annual means weight each month by its number of days and require every month in the period. Dec–Feb is labeled by the January and February year, so Dec–Feb 2025 starts in December 2024.</p>
+      <p>NASA GISTEMP supplies monthly anomalies relative to 1951–1980. For the other layers, the atlas subtracts the cell’s 1991–2020 average for the matching period. Missing cells appear in gray. Resampled layers use the nearest native grid point, and the map keeps a fixed color scale across years within each view.</p>
+    </section>
+    <section>
+      <h2>How trends are tested</h2>
+      <p>The trend is the least squares slope across 30 consecutive years for the period shown. The trend map uses annual values. The location panel uses the chosen month or season when a shorter period is selected. Slopes are expressed per decade. The confidence interval and two-sided p-value use a Newey–West standard error with three annual lags and an approximate normal reference distribution. The map colors represent slope magnitude. Each significance test applies to a single cell, without adjustment for multiple comparisons. The interval describes regression uncertainty and excludes uncertainty in the input dataset.</p>
+    </section>
+    <section>
+      <h2>Credits</h2>
+      <p>Coastlines and borders from <a href="https://www.naturalearthdata.com/about/terms-of-use/" target="_blank" rel="noopener">Natural Earth</a>. This independent project does not imply NASA endorsement.</p>
+    </section>
+  </article>
+</main>
+</body>
+</html>

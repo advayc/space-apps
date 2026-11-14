@@ -15,7 +15,7 @@ PRODUCTS = {
         "name": "Surface temperature anomaly",
         "group": "Temperature",
         "shortSource": "NASA GISS · GISTEMP v4",
-        "description": "How warm or cool the surface was compared with 1951–1980. NASA combines land air temperatures with sea surface temperatures.",
+        "description": "NASA combines air temperatures over land with water temperatures at the ocean surface to show how much warmer or cooler each area was than its historical average.",
         "inputUnits": ("K", "degC"),
         "agency": "NASA GISS",
         "product": "GISTEMP v4 · Land–Ocean Temperature Index",
@@ -83,13 +83,51 @@ PRODUCTS.update({
     "cloud": reanalysis("tcdc", "Total cloud cover", "Atmosphere",
         "The share of the sky covered by clouds at any height. Differences are in percentage points.",
         "pp", "%", "other_gauss", "tcdc.eatm.mon.mean.nc", 15, 5),
+    "air": reanalysis("air", "Air temperature at 2 m", "Temperature",
+        "Temperature of the air two meters above land or ocean. The map shows how it differs from the cell’s 1991–2020 average.",
+        "°C", "degK", "surface_gauss", "air.2m.mon.mean.nc", 3, 1),
+    "skin": reanalysis("skt", "Surface skin temperature", "Temperature",
+        "Temperature of Earth’s outermost surface, such as soil, vegetation, snow, or the ocean surface.",
+        "°C", "degC", "surface_gauss", "skt.sfc.mon.mean.nc", 3, 1),
+    "soil": {**reanalysis("soilw", "Topsoil moisture", "Land & ice",
+        "The fraction of the top 10 centimeters of soil occupied by water. Changes are in percentage points.",
+        "pp", "fraction", "surface_gauss", "soilw.0-10cm.mon.mean.nc", 8, 4), "multiplier": 100},
+    "soiltemp": reanalysis("tmp", "Topsoil temperature", "Land & ice",
+        "Average temperature in the top 10 centimeters of soil, where land estimates are available.",
+        "°C", "degK", "surface_gauss", "tmp.0-10cm.mon.mean.nc", 3, 1),
+    "ice": {
+        "variable": "icec", "name": "Sea ice concentration", "group": "Land & ice",
+        "description": "The share of each ocean cell covered by sea ice. Changes are in percentage points, and land is gray.",
+        "unit": "pp", "inputUnits": ("%",), "reference": "1991–2020", "agency": "NOAA PSL",
+        "product": "NOAA OISST v2 monthly sea ice concentration",
+        "shortSource": "NOAA PSL · OISST v2", "scale": 25, "trendScale": 15,
+        "source": "https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.html",
+        "download": PSL_FILES + "noaa.oisst.v2/icec.mnmean.nc", "displayGrid": 2,
+    },
+    "shortwave": reanalysis("dswrf", "Incoming sunlight at the surface", "Energy",
+        "Solar energy reaching the surface per second and square meter after passing through the atmosphere.",
+        "W/m²", "W/m^2", "surface_gauss", "dswrf.sfc.mon.mean.nc", 20, 7),
+    "latent": reanalysis("lhtfl", "Latent heat flux at the surface", "Energy",
+        "Energy transferred when water changes phase at the surface, mainly through evaporation.",
+        "W/m²", "W/m^2", "surface_gauss", "lhtfl.sfc.mon.mean.nc", 20, 7),
+    "sensible": reanalysis("shtfl", "Sensible heat flux at the surface", "Energy",
+        "Heat exchanged between the surface and the air because of a temperature difference.",
+        "W/m²", "W/m^2", "surface_gauss", "shtfl.sfc.mon.mean.nc", 25, 10),
     "olr": reanalysis("ulwrf", "Outgoing longwave radiation", "Energy",
         "Thermal infrared energy leaving Earth at the top of the atmosphere, measured as power per unit area.",
         "W/m²", "W/m^2", "other_gauss", "ulwrf.ntat.mon.mean.nc", 15, 5),
 })
 
 
-def annual_grid(path, key, meta):
+SEASONS = {
+    "djf": ((-1, 12), (0, 1), (0, 2)),
+    "mam": ((0, 3), (0, 4), (0, 5)),
+    "jja": ((0, 6), (0, 7), (0, 8)),
+    "son": ((0, 9), (0, 10), (0, 11)),
+}
+
+
+def grids(path, key, meta):
     with Dataset(path) as source:
         time = source["time"]
         dates = num2date(time[:], time.units, getattr(time, "calendar", "standard"))
@@ -116,26 +154,55 @@ def annual_grid(path, key, meta):
         field = source[meta["variable"]]
         if field.dimensions != ("time", "lat", "lon") or field.units not in meta["inputUnits"]:
             raise ValueError(f"{path}: unexpected field metadata {field.dimensions}, {field.units}")
+        monthly = {}
         for year, months in sorted(months_by_year.items()):
-            if len(months) != 12:
-                continue
-            block = field[[months[m] for m in range(1, 13)]].astype(np.float64).filled(np.nan)
-            # K and °C increments are identical for temperature anomalies.
+            order = sorted(months)
+            block = field[[months[m] for m in order]].astype(np.float64).filled(np.nan)
             if key == "precipitation" and (block < 0).any():
                 raise ValueError(f"{path}: negative precipitation rate in {year}")
-            weights = [monthrange(year, m)[1] for m in range(1, 13)]
-            annual[year] = np.average(block, weights=weights, axis=0)[ys][:, xs]
+            for month, values in zip(order, block[:, ys][:, :, xs], strict=True):
+                monthly[year, month] = values * meta.get("multiplier", 1)
 
-    if key != "temperature":
-        # Normalize each cell to its own 30-year mean.
-        reference = np.mean([annual[y] for y in range(1991, 2021)], axis=0)
-        annual = {year: values - reference for year, values in annual.items()}
-    years = list(range(min(annual), max(annual) + 1))
-    empty = np.full((len(ys), len(xs)), np.nan)
-    data = np.asarray([annual.get(year, empty) for year in years], dtype="<f4")
-    if not np.isfinite(data).any():
-        raise ValueError(f"{path}: all annual data are missing")
-    return years, step, data
+    def aggregate(period):
+        result = {}
+        for year in months_by_year:
+            dates = [(year + offset, month) for offset, month in period]
+            if all(date in monthly for date in dates):
+                weights = [monthrange(y, m)[1] for y, m in dates]
+                result[year] = np.average([monthly[date] for date in dates], weights=weights, axis=0)
+        if key != "temperature":
+            # Use the same period in every baseline year, including December of
+            # the prior year for winters labeled by their January/February year.
+            reference = np.mean([result[y] for y in range(1991, 2021)], axis=0)
+            result = {year: values - reference for year, values in result.items()}
+        years = list(range(min(result), max(result) + 1))
+        empty = np.full((len(ys), len(xs)), np.nan)
+        data = np.asarray([result.get(year, empty) for year in years], dtype="<f4")
+        if not np.isfinite(data).any():
+            raise ValueError(f"{path}: no finite data for {period}")
+        return years, data
+
+    yield "annual", step, aggregate([(0, m) for m in range(1, 13)])
+    for month in range(1, 13):
+        yield f"{month:02}", step, aggregate([(0, month)])
+    for name, period in SEASONS.items():
+        yield name, step, aggregate(period)
+
+
+def write_grid(output, name, years, data, *, compact=False):
+    entry = {"years": years}
+    if compact:
+        valid = np.isfinite(data)
+        # Preserve missing cells and bound rounding to half the recorded step.
+        precision = max(0.002, float(np.max(np.abs(data[valid]))) / 32767)
+        packed = np.full(data.shape, -32768, dtype="<i2")
+        packed[valid] = np.clip(np.rint(data[valid] / precision), -32767, 32767)
+        entry["precision"] = precision
+        data = packed
+    payload = gzip.compress(data.tobytes(), compresslevel=5 if compact else 7, mtime=0)
+    filename = f"{name}-{sha256(payload).hexdigest()[:10]}.bin"
+    (output / filename).write_bytes(payload)
+    return {**entry, "file": filename}
 
 
 def main():
@@ -150,17 +217,20 @@ def main():
         path = getattr(args, key)
         if path is None:
             continue
-        years, step, data = annual_grid(path, key, meta)
-        payload = gzip.compress(data.tobytes(), compresslevel=7, mtime=0)
-        filename = f"{key}-{sha256(payload).hexdigest()[:10]}.bin"
-        (args.output / filename).write_bytes(payload)
+        periods = grids(path, key, meta)
+        _, step, (years, data) = next(periods)
+        annual = write_grid(args.output, key, years, data)
+        subannual = {
+            period: write_grid(args.output, f"{key}-{period}", period_years, period_data, compact=True)
+            for period, _, (period_years, period_data) in periods
+        }
         datasets[key] = {
             **{name: value for name, value in meta.items() if name != "inputUnits"},
-            "years": years, "step": step,
+            **annual, "periods": subannual, "step": step,
             "height": data.shape[1], "width": data.shape[2],
-            "file": filename, "sourceSha256": sha256(path.read_bytes()).hexdigest(),
+            "sourceSha256": sha256(path.read_bytes()).hexdigest(),
         }
-        print(f"{key}: {years[0]}–{years[-1]}, {data.shape}, {len(payload):,} compressed bytes")
+        print(f"{key}: {years[0]}–{years[-1]} annual, {len(subannual)} monthly and seasonal series")
     (args.output / "catalog.json").write_text(json.dumps(datasets, indent=2, ensure_ascii=False) + "\n")
 
 
