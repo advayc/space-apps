@@ -132,3 +132,12 @@ footer{align-items:center}
 @media(max-width:400px){.time-ticks span:nth-child(2){display:none}}
 
 .inspector[aria-busy=true] :is(.numbers,.chart-header,.chart-interactive,.result){opacity:.5}
+
+
+.chart-interval{padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:var(--control,#efefe7)}
+.interval-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#interval-summary{font-size:12px;line-height:1.35;color:var(--ink)}
+#interval-clear{padding:4px 7px;font-size:11px}
+.interval-header + dl:not([hidden]){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:7px 0 0}
+.chart-interval dt{font-size:11px;color:var(--muted)}
+.chart-interval dd{margin:3px 0 0;color:var(--ink);font-size:13px}

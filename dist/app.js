@@ -43,6 +43,7 @@ let rotation = [93, -46], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEF
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let chartData, chartCursor, chartLayout;
+let intervalAnchor = null, intervalEnd = null;
 let placeMatches = [], placeActive = -1;
 const chart = $('chart');
 const datasets = new Map();
@@ -152,6 +153,7 @@ async function selectDate(index) {
   }
   active = null;
   chartData = chartCursor = chartLayout = null;
+  clearChartInterval();
   $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
   $('chart-tooltip').hidden = true;
   $('chart-readout').textContent = '';
@@ -210,7 +212,7 @@ function history(index) {
 function yearIndex() { return year - active.years[0]; }
 function renderTimelineTicks() {
   const last = timeline.length - 1;
-  $('time-ticks').replaceChildren(...[0, Math.floor(last / 2), last].map(index => {
+  $('time-ticks').replaceChildren(...[...new Set([0, Math.floor(last / 2), last])].map(index => {
     const {year: tickYear, period} = timeline[index];
     const span = document.createElement('span');
     span.textContent = dateLabel(tickYear, period);
@@ -228,6 +230,7 @@ function updateTimeline() {
   $('year-label').value = label;
   $('previous').disabled = timelineIndex === 0;
   $('next').disabled = timelineIndex === last;
+  $('play').disabled = !last;
   $('previous').setAttribute('aria-label', 'Previous ' + unit);
   $('next').setAttribute('aria-label', 'Next ' + unit);
 }
@@ -420,7 +423,7 @@ function updateInspector() {
   setMetric($('value'), current, active.unit);
   setMetric($('slope'), estimate?.rate, active.unit);
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
-    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use the arrow keys to read values and Enter to set the map date.');
+    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use arrow keys to inspect, Enter to select endpoints, and Escape to clear.');
   $('csv').disabled = !series.some(Number.isFinite);
   const hasTest = estimate?.p != null;
   $('trend-details').hidden = !hasTest;
@@ -440,6 +443,7 @@ function updateInspector() {
     $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
   }
   chartData = {series, idx, estimate};
+  updateChartInterval();
   drawChart();
 }
 
@@ -500,7 +504,12 @@ function drawChart() {
   const min = Math.min(0, ...observed), max = Math.max(0, ...observed);
   const x = i => left + i / (series.length - 1) * (right - left);
   const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
-  if (estimate) {
+  const intervalColor = dark ? '#eab37c' : '#934926';
+  if (intervalAnchor !== null) {
+    const other = intervalEnd ?? chartCursor ?? intervalAnchor;
+    g.fillStyle = dark ? '#eab37c38' : '#ce8c5033';
+    g.fillRect(Math.min(x(intervalAnchor), x(other)), top, Math.abs(x(intervalAnchor) - x(other)), bottom - top);
+  } else if (estimate) {
     g.fillStyle = dark ? '#2d4135' : '#e1eadc';
     g.fillRect(x(idx - WINDOW + 1), top, x(idx) - x(idx - WINDOW + 1), bottom - top);
   }
@@ -532,6 +541,16 @@ function drawChart() {
   if (Number.isFinite(series[idx])) {
     g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5, 0, Math.PI * 2); g.fillStyle = dark ? '#a6d6b8' : '#24523e'; g.fill();
   }
+  for (const endpoint of new Set([intervalAnchor, intervalEnd])) {
+    if (endpoint === null) continue;
+    const px = x(endpoint);
+    g.beginPath(); g.moveTo(px, top); g.lineTo(px, bottom);
+    g.lineWidth = 1.5; g.strokeStyle = intervalColor; g.stroke();
+    if (Number.isFinite(series[endpoint])) {
+      g.beginPath(); g.arc(px, y(series[endpoint]), 4.5, 0, Math.PI * 2);
+      g.fillStyle = intervalColor; g.fill();
+    }
+  }
   if (chartCursor != null) {
     const cursorX = x(inspected);
     g.beginPath(); g.moveTo(cursorX, top); g.lineTo(cursorX, bottom);
@@ -562,27 +581,57 @@ function inspectChart(index, announce = false) {
   if (announce) $('chart-announcement').textContent = $('chart-readout').textContent;
 }
 
-function jumpToChartYear(index) {
-  if (index == null || !active) return;
-  const selected = active.years[index];
-  stop();
-  if (mode === 'trend' && selected < timeline[0].year) {
-    mode = 'annual';
-    $('mode').value = mode;
-    year = selected;
-    selectLayer(layer);
+function updateChartInterval() {
+  $('chart-interval').hidden = intervalAnchor === null;
+  $('interval-values').hidden = intervalEnd === null;
+  if (intervalAnchor === null || !chartData || !active) return;
+  if (intervalEnd === null) {
+    $('interval-summary').textContent = labelForYear(active.years[intervalAnchor]) + ' selected. Pick another point.';
     return;
   }
-  selectDate(nearestIndex(timeline, mode, selected, periodKey()));
+  const start = Math.min(intervalAnchor, intervalEnd);
+  const end = Math.max(intervalAnchor, intervalEnd);
+  const startYear = active.years[start];
+  const endYear = active.years[end];
+  const startValue = chartData.series[start];
+  const endValue = chartData.series[end];
+  $('interval-summary').textContent = startYear + '–' + endYear + ' · ' +
+    (endYear - startYear) + (endYear - startYear === 1 ? ' year' : ' years');
+  setMetric($('interval-start'), startValue, active.unit);
+  setMetric($('interval-end'), endValue, active.unit);
+  setMetric($('interval-change'), endValue - startValue, active.unit);
 }
 
+function clearChartInterval() {
+  intervalAnchor = intervalEnd = null;
+  updateChartInterval();
+}
+
+function selectChartPoint(index) {
+  if (index == null || !chartData) return;
+  stop();
+  if (intervalAnchor === null || intervalEnd !== null) {
+    intervalAnchor = index;
+    intervalEnd = null;
+  } else if (index !== intervalAnchor) {
+    intervalEnd = index;
+  }
+  updateChartInterval();
+  drawChart();
+}
+
+$('interval-clear').addEventListener('click', () => {
+  clearChartInterval();
+  chart.focus();
+  drawChart();
+});
 chart.addEventListener('pointermove', event => inspectChart(chartIndexAt(event)));
 chart.addEventListener('pointerleave', () => inspectChart(null));
 chart.addEventListener('blur', () => inspectChart(null));
 chart.addEventListener('click', event => {
   const index = chartIndexAt(event);
   inspectChart(index);
-  jumpToChartYear(index);
+  selectChartPoint(index);
 });
 chart.addEventListener('keydown', event => {
   if (!active) return;
@@ -593,9 +642,11 @@ chart.addEventListener('keydown', event => {
     inspectChart(clamp(next[event.key], 0, active.years.length - 1), true);
   } else if (event.key === 'Enter') {
     event.preventDefault();
-    jumpToChartYear(index);
+    selectChartPoint(index);
   } else if (event.key === 'Escape') {
-    inspectChart(null);
+    clearChartInterval();
+    chartCursor = null;
+    drawChart();
   }
 });
 
@@ -775,6 +826,7 @@ earth.addEventListener('pointerup', event => {
   }
   const target = locationAt(event);
   if (target) {
+    clearChartInterval();
     point = target; placeName = 'Selected grid cell';
     $('place-query').value = '';
     updateInspector(); queueDraw();
@@ -798,6 +850,7 @@ earth.addEventListener('keydown', event => {
     event.preventDefault();
     animateCamera(rotation[0] + direction[0], clamp(rotation[1] + direction[1], -89, 89), zoom, 150);
   } else if (event.key === 'Enter') {
+    clearChartInterval();
     point = [-rotation[0], -rotation[1]]; placeName = 'Selected grid cell';
     $('place-query').value = '';
     updateInspector(); queueDraw();
@@ -900,6 +953,7 @@ function highlightPlace(index) {
 }
 
 function goToPlace(place) {
+  clearChartInterval();
   placeName = place.name;
   point = [place.lon, place.lat];
   $('place-query').value = place.name;
@@ -944,10 +998,16 @@ $('mode').addEventListener('change', event => {
 $('period').addEventListener('change', event => {
   stop();
   const period = event.target.value;
-  const years = catalog[layer].periods[period].years;
-  const selectedYear = years.reduce((best, candidate) =>
-    Math.abs(candidate - year) < Math.abs(best - year) ? candidate : best);
-  selectDate(nearestIndex(timeline, mode, selectedYear, period));
+  let bestIndex = timelineIndex;
+  let bestDistance = Infinity;
+  timeline.forEach((entry, index) => {
+    const distance = Math.abs(entry.year - year);
+    if (entry.period === period && distance < bestDistance) {
+      bestIndex = index;
+      bestDistance = distance;
+    }
+  });
+  selectDate(bestIndex);
 });
 $('year').addEventListener('input', event => {
   stop();

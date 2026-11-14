@@ -95,8 +95,19 @@
         <div id="chart-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <output id="chart-readout" class="sr-only" aria-live="off"></output>
-      <p id="chart-help" class="chart-help">Hover for values · Click to set date</p>
+      <p id="chart-help" class="chart-help">Select two points to compare dates.</p>
       <span id="chart-announcement" class="sr-only" role="status"></span>
+      <div id="chart-interval" class="chart-interval" hidden>
+        <div class="interval-header">
+          <output id="interval-summary" aria-live="polite"></output>
+          <button id="interval-clear" class="utility" type="button">Clear</button>
+        </div>
+        <dl id="interval-values" hidden>
+          <div><dt>Start</dt><dd id="interval-start"></dd></div>
+          <div><dt>End</dt><dd id="interval-end"></dd></div>
+          <div><dt>Change</dt><dd id="interval-change"></dd></div>
+        </dl>
+      </div>
       <div class="result" id="result">
         <div class="result-head">
           <h3>Trend uncertainty</h3>
