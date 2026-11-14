@@ -30,8 +30,21 @@ function drawRecord() {
   const future = forecast(GLOBAL, GLOBAL.length - 1, HORIZON - lastYear, lastYear + 1) ?? [];
   const bars = [...GLOBAL.map(value => ({value})),
     ...future.map(f => ({value: f.sim, central: f.value, low: f.low, high: f.high, projected: true}))];
-  const max = Math.max(...bars.map(bar => bar.high ?? bar.value)), min = Math.min(...bars.map(bar => bar.value));
+  const max = Math.max(...bars.map(bar => bar.high ?? bar.value)), min = Math.min(...bars.map(bar => bar.low ?? bar.value));
   const H = 100, zero = max / (max - min) * H, unit = H / (max - min);
+  const range = max - min;
+  const step = range > 4 ? 1 : range > 2 ? 0.5 : 0.2;
+  const ticks = [];
+  for (let value = Math.ceil((min - 1e-9) / step) * step; value <= max + 1e-9; value += step) ticks.push(value);
+  $('record-y').replaceChildren(...ticks.map(value => {
+    const tick = document.createElement('span');
+    const fraction = (max - value) / range;
+    tick.textContent = Math.abs(value) < 5e-7 ? '0' : (value < 0 ? '−' : '+') + Math.abs(value).toFixed(step >= 1 ? 0 : 1);
+    tick.style.top = fraction * 100 + '%';
+    if (fraction < 0.04) tick.className = 'is-edge-top';
+    else if (fraction > 0.96) tick.className = 'is-edge-bottom';
+    return tick;
+  }));
   svg.setAttribute('viewBox', '0 0 ' + bars.length + ' ' + H);
   const readout = $('record-readout');
   const describe = (bar, i) => bar.projected
@@ -61,7 +74,11 @@ function drawRecord() {
     rect.setAttribute('y', zero - bar.high * unit); rect.setAttribute('height', (bar.high - bar.low) * unit);
     return [rect];
   });
-  svg.replaceChildren(...rects, ...whiskers);
+  const zeroLine = document.createElementNS(SVG, 'line');
+  zeroLine.setAttribute('class', 'bar-zero');
+  zeroLine.setAttribute('x1', 0); zeroLine.setAttribute('x2', bars.length);
+  zeroLine.setAttribute('y1', zero); zeroLine.setAttribute('y2', zero);
+  svg.replaceChildren(...rects, ...whiskers, zeroLine);
   if (!svg.classList.contains('ranges-in')) {
     const reveal = () => svg.classList.add('ranges-in');
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
