@@ -51,6 +51,7 @@
         </div>
         <div class="map" id="map">
           <canvas id="earth" tabindex="0" aria-label="Interactive climate globe. Drag to rotate, or use arrow keys. Click to select a grid cell. The location menu also offers keyboard selection."></canvas>
+          <canvas id="earth-outgoing" aria-hidden="true"></canvas>
           <div id="map-status" class="map-status" role="status">Loading climate data…</div>
         </div>
         <div class="map-footer">
@@ -71,10 +72,13 @@
       </div>
     </section>
     <aside class="inspector" aria-label="Location analysis">
-      <div class="inspector-top"><span class="eyebrow">LOCATION ANALYSIS</span><span id="resolution">2° GRID</span></div>
-      <div class="location"><h2 id="place-name">Canadian Arctic</h2><div id="coordinates">74.00° N · 95.00° W</div></div>
+      <div class="location">
+        <h2 id="place-name">Canadian Arctic</h2>
+        <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
+      </div>
       <label class="sr-only" for="place">Jump to a location</label>
       <select id="place">
+        <option value="" selected>Jump to a location…</option>
         <option value="arctic">Canadian Arctic</option>
         <option value="toronto">Toronto</option>
         <option value="pacific">Equatorial Pacific</option>
@@ -82,23 +86,29 @@
         <option value="sahel">West African Sahel</option>
         <option value="india">Central India</option>
         <option value="antarctica">East Antarctica</option>
-        <option value="custom" disabled>Selected grid cell</option>
       </select>
-      <div class="numbers">
-        <div><span id="value-label">2025 ANOMALY</span><strong id="value">—</strong></div>
-        <div><span>30-YEAR TREND</span><strong id="slope">—</strong></div>
-      </div>
-      <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3><span id="chart-period"></span></div>
+      <dl class="numbers">
+        <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
+        <div><dt>Trend per decade</dt><dd id="slope">—</dd></div>
+      </dl>
+      <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3></div>
       <div class="chart-interactive">
         <canvas id="chart" tabindex="0" aria-label="Historical anomalies for the selected cell" aria-describedby="chart-help"></canvas>
         <div id="chart-tooltip" class="chart-tooltip" hidden></div>
       </div>
-      <output id="chart-readout" class="chart-readout" aria-live="off"></output>
-      <p id="chart-help" class="chart-help">Hover to inspect · Click to set map year</p>
+      <output id="chart-readout" class="sr-only" aria-live="off"></output>
+      <p id="chart-help" class="chart-help">Hover for values · Click to set year</p>
       <span id="chart-announcement" class="sr-only" role="status"></span>
       <div class="result" id="result">
-        <span id="inference" class="eyebrow">TREND TEST</span>
-        <p id="interval">Select a location to inspect its trend.</p>
+        <div class="result-head">
+          <h3>Trend uncertainty</h3>
+          <span id="trend-period"></span>
+        </div>
+        <dl id="trend-details" hidden>
+          <div><dt>95% interval</dt><dd id="interval"></dd></div>
+          <div><dt><math><mi>p</mi></math>-value</dt><dd id="p-value"></dd></div>
+        </dl>
+        <p id="inference"></p>
       </div>
       <button id="csv" class="download">Download location CSV <span aria-hidden="true">↓</span></button>
     </aside>

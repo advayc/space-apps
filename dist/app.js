@@ -3,8 +3,13 @@ import { WINDOW, slopeAt, trend } from './statistics.js';
 const $ = id => document.getElementById(id);
 const earth = $('earth');
 const ctx = earth.getContext('2d');
+const outgoing = $('earth-outgoing');
+const outgoingCtx = outgoing.getContext('2d');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let outgoingFade, chartFade, pendingFade = 0, rendered = false;
 const raster = document.createElement('canvas');
 const rasterCtx = raster.getContext('2d');
+const NO_DATA_COLOR = [88, 99, 107];
 const places = {
   arctic: ['Canadian Arctic', -95, 74],
   toronto: ['Toronto', -79.38, 43.65],
@@ -30,7 +35,7 @@ const palette = Object.fromEntries(Object.entries(themes).map(([key, colors]) =>
   }),
 ]));
 const themeFor = data => data.group === 'Water' ? 'water'
-  : data.group === 'Atmosphere' ? 'atmosphere'
+  : ['Atmosphere', 'Wind'].includes(data.group) ? 'atmosphere'
   : data.group === 'Energy' ? 'energy'
   : data.group === 'Land & ice' ? 'land' : 'temperature';
 
@@ -42,6 +47,7 @@ let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'globe', mode = 'annual', year = 2025;
 let rotation = [93, -46], zoom = 1, placeKey = 'arctic', point = places.arctic.slice(1);
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
+let cameraFrame, zoomTarget, cellColors;
 let chartData, chartCursor, chartLayout;
 const chart = $('chart');
 const datasets = new Map();
@@ -135,6 +141,7 @@ async function loadDataset(key, period) {
 
 async function selectLayer(key) {
   stop();
+  stopCamera();
   const version = ++loadVersion;
   layer = key;
   active = null;
@@ -159,7 +166,11 @@ async function selectLayer(key) {
     rasterMap = null;
     year = clamp(year, minimumYear(), active.years.at(-1));
     $('map-status').hidden = true;
-    update();
+    update(220);
+    if (!reducedMotion.matches) {
+      chartFade?.cancel();
+      chartFade = chart.animate([{ opacity: .55 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+    }
   } catch (error) {
     if (version === loadVersion) {
       $('map-status').textContent = 'Climate data could not load.';
@@ -175,9 +186,13 @@ async function selectLayer(key) {
 }
 
 function minimumYear() { return active.years[mode === 'trend' ? WINDOW - 1 : 0]; }
-function cell([lon, lat]) {
+function cellIndices(lon, lat) {
   const col = clamp(Math.floor((wrap(lon) + 180) / active.step), 0, active.width - 1);
   const row = clamp(Math.floor((90 - lat) / active.step), 0, active.height - 1);
+  return [col, row];
+}
+function cell([lon, lat]) {
+  const [col, row] = cellIndices(lon, lat);
   return { index: row * active.width + col,
     center: [-180 + (col + .5) * active.step, 90 - (row + .5) * active.step] };
 }
@@ -187,11 +202,13 @@ function history(index) {
 function yearIndex() { return year - active.years[0]; }
 function setYear(next) {
   if (!active) return;
-  year = clamp(next, minimumYear(), active.years.at(-1));
-  update();
+  const selected = clamp(next, minimumYear(), active.years.at(-1));
+  if (selected === year) return;
+  year = selected;
+  update(160);
 }
 
-function update() {
+function update(fade = 0) {
   if (!active) return;
   const idx = yearIndex();
   const climate = active.values.subarray(idx * active.size, (idx + 1) * active.size);
@@ -215,11 +232,13 @@ function update() {
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
+  cellColors = Int16Array.from(grid, value => Number.isFinite(value)
+    ? clamp(Math.round((value / scale + 1) * 127.5), 0, 255) : -1);
   $('legend-min').textContent = '≤ −' + scale;
   $('legend-max').textContent = '≥ +' + scale;
   $('ramp').style.background = 'linear-gradient(90deg,' + themes[themeFor(active)].join(',') + ')';
   updateInspector();
-  queueDraw();
+  queueDraw(fade);
 }
 
 function sizeCanvas(canvas) {
@@ -234,8 +253,32 @@ function sizeCanvas(canvas) {
   return [rect.width, rect.height];
 }
 
-function queueDraw() {
-  if (!frame) frame = requestAnimationFrame(() => { frame = null; drawMap(); });
+function queueDraw(fade = 0) {
+  if (typeof fade === 'number') pendingFade = Math.max(pendingFade, fade);
+  if (!frame) {
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      const duration = pendingFade;
+      pendingFade = 0;
+      drawMap(duration);
+    });
+  }
+}
+
+function finishMapFade() {
+  outgoingFade?.cancel();
+  outgoingFade = null;
+}
+
+function crossfadeMap(duration) {
+  if (!duration || !rendered || reducedMotion.matches || drag?.moved || cameraFrame) return;
+  // Let rapid scrubbing finish the current dissolve instead of stacking fades.
+  if (outgoingFade?.playState === 'running') return;
+  outgoing.width = earth.width;
+  outgoing.height = earth.height;
+  outgoingCtx.drawImage(earth, 0, 0);
+  const timing = {duration, easing: 'ease-out'};
+  outgoingFade = outgoing.animate([{opacity: 1}, {opacity: 0}], timing);
 }
 
 function geometry() {
@@ -252,10 +295,11 @@ function geometry() {
   }
 }
 
-function mapRaster() {
+function mapRaster(moving) {
   const [left, top, right, bottom] = mapBounds;
   const sw = right - left, sh = bottom - top;
-  const scale = Math.min(1.3, 540 / Math.max(sw, sh));
+  // A smaller raster reduces projection work while the camera is moving.
+  const scale = Math.min(1.3, (moving ? 260 : 540) / Math.max(sw, sh));
   const w = Math.max(1, Math.round(sw * scale)), h = Math.max(1, Math.round(sh * scale));
   raster.width = w;
   raster.height = h;
@@ -271,18 +315,20 @@ function mapRaster() {
       const location = projection.invert([px, py]);
       if (!location?.every(Number.isFinite)) continue;
       const index = y * w + x;
-      indices[index] = cell(location).index;
+      const [col, row] = cellIndices(...location);
+      indices[index] = row * active.width + col;
       if (view === 'globe') {
         const z = Math.sqrt(1 - dx * dx - dy * dy);
         shade[index] = .72 + .28 * clamp(-dx * .35 - dy * .45 + z * .88, 0, 1);
       }
     }
   }
-  return {indices, shade, image: rasterCtx.createImageData(w, h)};
+  return {indices, shade, moving, image: rasterCtx.createImageData(w, h)};
 }
 
-function drawMap() {
+function drawMap(fade) {
   if (!active || !d3 || !grid) return;
+  crossfadeMap(fade);
   const oldWidth = width, oldHeight = height;
   [width, height] = sizeCanvas(earth);
   if (width < 1 || height < 1) return;
@@ -300,14 +346,14 @@ function drawMap() {
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, width, height);
   }
-  rasterMap ??= mapRaster();
+  const moving = view === 'globe' && Boolean(drag?.moved || cameraFrame);
+  if (!rasterMap || rasterMap.moving !== moving) rasterMap = mapRaster(moving);
   const {indices, shade, image} = rasterMap;
   const colors = palette[themeFor(active)];
-  const scale = mode === 'trend' ? active.trendScale : active.scale;
   for (let i = 0; i < indices.length; i++) {
     if (indices[i] < 0) continue;
-    const value = grid[indices[i]];
-    const color = Number.isFinite(value) ? colors[clamp(Math.round((value / scale + 1) * 127.5), 0, 255)] : [88, 99, 107];
+    const colorIndex = cellColors[indices[i]];
+    const color = colorIndex < 0 ? NO_DATA_COLOR : colors[colorIndex];
     const pixel = i * 4;
     image.data[pixel] = color[0] * shade[i];
     image.data[pixel + 1] = color[1] * shade[i];
@@ -332,6 +378,7 @@ function drawMap() {
     ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2);
     ctx.fillStyle = '#fffce8'; ctx.fill();
   }
+  rendered = true;
 }
 
 function drawLine(draw, feature, color, weight) {
@@ -354,35 +401,65 @@ function updateInspector() {
   const current = series[idx];
   const estimate = trend(series, idx);
   $('place-name').textContent = places[placeKey]?.[0] ?? 'Selected grid cell';
-  $('coordinates').textContent = coords(center) + ' · cell center';
-  $('resolution').textContent = active.step + '° GRID';
+  $('coordinates').textContent = coords(center);
+  $('resolution').textContent = active.step + '° grid';
   $('value-label').textContent = dateLabel(year) + ' anomaly';
   setMetric($('value'), current, active.unit);
-  setMetric($('slope'), estimate?.rate, active.unit + ' / decade');
-  $('chart-period').textContent = active.years[0] + '–' + active.years.at(-1);
+  setMetric($('slope'), estimate?.rate, active.unit);
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
     ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use the arrow keys to read values and Enter to set the map year.');
   $('csv').disabled = !series.some(Number.isFinite);
-  if (estimate?.p != null) {
-    $('inference').textContent = estimate.p < .05 ? 'SIGNIFICANT AT 5% · LOCAL TEST' : 'NOT SIGNIFICANT AT 5%';
-    const p = estimate.p < .001 ? 'p < 0.001' : 'p = ' + estimate.p.toFixed(3);
-    $('interval').textContent = '95% CI ' + signed(estimate.low, 3) + ' to ' + signed(estimate.high, 3) + ' ' +
-      active.unit + '/decade. ' + p + ' · ' + (year - WINDOW + 1) + '–' + year + '.';
+  const hasTest = estimate?.p != null;
+  $('trend-details').hidden = !hasTest;
+  $('trend-period').textContent = estimate ? (year - WINDOW + 1) + '–' + year : '';
+  if (hasTest) {
+    const low = mathNumber(estimate.low, 3);
+    const high = mathNumber(estimate.high, 3);
+    $('interval').replaceChildren(mathExpression(
+      mathToken('mo', '['), low, mathToken('mo', ','), high, mathToken('mo', ']')
+    ));
+    // The trend and interval share the anomaly's unit, per decade.
+    $('p-value').replaceChildren(estimate.p < .001
+      ? mathExpression(mathToken('mo', '<'), mathNumber(.001, 3, false))
+      : mathExpression(mathNumber(estimate.p, Math.abs(estimate.p - .05) < .001 ? 4 : 3, false)));
+    $('inference').textContent = estimate.p < .05 ? 'Significant at 5%' : 'Not significant at 5%';
   } else {
-    $('inference').textContent = 'TREND TEST UNAVAILABLE';
-    $('interval').textContent = estimate
-      ? 'The regression residuals are too small to estimate uncertainty.'
-      : 'The trend needs 30 consecutive years of data for this period, ending in ' + year + '.';
+    $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
   }
   chartData = {series, idx, estimate};
   drawChart();
 }
 
+const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
+
+function mathToken(tag, text) {
+  const node = document.createElementNS(MATH_NS, tag);
+  node.textContent = text;
+  return node;
+}
+
+function mathExpression(...tokens) {
+  const math = document.createElementNS(MATH_NS, 'math');
+  const row = document.createElementNS(MATH_NS, 'mrow');
+  row.append(...tokens);
+  math.append(row);
+  return math;
+}
+
+function mathNumber(value, digits, showSign = true) {
+  const formatted = showSign ? signed(value, digits) : value.toFixed(digits);
+  if (!/^[+−]/.test(formatted)) return mathToken('mn', formatted);
+  const row = document.createElementNS(MATH_NS, 'mrow');
+  row.append(mathToken('mo', formatted[0]), mathToken('mn', formatted.slice(1)));
+  return row;
+}
+
 function setMetric(element, value, unit) {
-  element.textContent = Number.isFinite(value) ? signed(value) : '—';
-  const small = document.createElement('small');
-  small.textContent = unit;
-  element.append(small);
+  if (!Number.isFinite(value)) {
+    element.textContent = '—';
+    return;
+  }
+  element.replaceChildren(mathExpression(mathNumber(value, 2), mathToken('mtext', ' ' + unit)));
 }
 
 function drawChart() {
@@ -526,10 +603,71 @@ function rotate(x, y) {
   rotation = [wrap(x), clamp(y, -89, 89)];
   rasterMap = null; queueDraw();
 }
-function recenter() {
-  zoom = 1;
-  rotate(-point[0], -point[1]);
+function stopCamera() {
+  cancelAnimationFrame(cameraFrame);
+  cameraFrame = null;
+  zoomTarget = null;
 }
+
+function animateCamera(longitude, latitude, targetZoom, duration) {
+  stopCamera();
+  finishMapFade();
+  if (reducedMotion.matches || view !== 'globe' || !active) {
+    zoom = targetZoom;
+    rotate(longitude, latitude);
+    return;
+  }
+
+  const [startLon, startLat] = rotation;
+  const startZoom = zoom;
+  const deltaLon = wrap(longitude - startLon);
+  const started = performance.now();
+  zoomTarget = targetZoom;
+  function step(now) {
+    const progress = clamp((now - started) / duration, 0, 1);
+    const eased = 1 - (1 - progress) ** 3;
+    zoom = startZoom + (targetZoom - startZoom) * eased;
+    cameraFrame = progress < 1 ? requestAnimationFrame(step) : null;
+    if (!cameraFrame) zoomTarget = null;
+    rotate(startLon + deltaLon * eased, startLat + (latitude - startLat) * eased);
+  }
+  cameraFrame = requestAnimationFrame(step);
+}
+
+function coast(velocityX, velocityY) {
+  if (reducedMotion.matches || Math.hypot(velocityX, velocityY) < .025) return;
+  let last = performance.now();
+  const started = last;
+  function step(now) {
+    const elapsed = Math.min(now - last, 32);
+    last = now;
+    const decay = Math.exp(-elapsed / 115);
+    const distance = 115 * (1 - decay);
+    const [longitude, latitude] = rotation;
+    const nextLat = latitude + velocityY * distance;
+    const nextLon = longitude + velocityX * distance;
+    velocityX *= decay;
+    velocityY = nextLat < -89 || nextLat > 89 ? 0 : velocityY * decay;
+    cameraFrame = now - started < 480 && Math.hypot(velocityX, velocityY) >= .015
+      ? requestAnimationFrame(step) : null;
+    rotate(nextLon, nextLat);
+  }
+  cameraFrame = requestAnimationFrame(step);
+}
+
+function recenter() {
+  animateCamera(-point[0], -point[1], 1, 420);
+}
+
+reducedMotion.addEventListener('change', () => {
+  if (!reducedMotion.matches) return;
+  finishMapFade();
+  chartFade?.cancel();
+  stopCamera();
+  rasterMap = null;
+  queueDraw();
+});
+
 function locationAt(event) {
   if (!active || !projection || !mapBounds) return null;
   const rect = earth.getBoundingClientRect();
@@ -555,56 +693,83 @@ function updateMapReadout() {
     : 'No data');
 }
 earth.addEventListener('pointerdown', event => {
-  if (event.button !== 0) return;
-  drag = {x: event.clientX, y: event.clientY, moved: false, rotation};
+  if (!event.isPrimary || event.button !== 0) return;
+  stopCamera();
+  finishMapFade();
+  drag = {id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX,
+    lastY: event.clientY, time: event.timeStamp, velocityX: 0, velocityY: 0, moved: false, rotation,
+    degreesPerPixel: 180 / Math.PI / Math.max(1, projection?.scale() ?? 150)};
   earth.setPointerCapture(event.pointerId);
   mapHover = null;
   updateMapReadout();
 });
 earth.addEventListener('pointermove', event => {
+  if (drag && event.pointerId !== drag.id) return;
   if (drag) {
     const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
     if (Math.hypot(dx, dy) > 4) drag.moved = true;
     if (drag.moved && view === 'globe') {
+      const scale = drag.degreesPerPixel;
+      const elapsed = Math.max(1, event.timeStamp - drag.time);
+      drag.velocityX = clamp((event.clientX - drag.lastX) * scale / elapsed, -.4, .4);
+      drag.velocityY = clamp((drag.lastY - event.clientY) * scale / elapsed, -.4, .4);
+      drag.lastX = event.clientX;
+      drag.lastY = event.clientY;
+      drag.time = event.timeStamp;
       earth.classList.add('dragging');
-      rotate(drag.rotation[0] + dx * .42 / zoom, drag.rotation[1] - dy * .42 / zoom);
+      rotate(drag.rotation[0] + dx * scale, drag.rotation[1] - dy * scale);
     }
     return;
   }
   mapHover = event.pointerType === 'mouse' ? locationAt(event) : null;
   updateMapReadout();
 });
+function releaseDrag(event) {
+  if (event.pointerId !== drag?.id) return;
+  drag = null;
+  earth.classList.remove('dragging');
+  queueDraw();
+}
 earth.addEventListener('pointerup', event => {
-  if (drag && !drag.moved) {
-    const target = locationAt(event);
-    if (target) {
-      point = target; placeKey = 'custom'; $('place').value = placeKey;
-      updateInspector(); queueDraw();
-    }
+  if (event.pointerId !== drag?.id) return;
+  const finished = drag;
+  releaseDrag(event);
+  if (finished.moved) {
+    if (view === 'globe' && event.timeStamp - finished.time < 75) coast(finished.velocityX, finished.velocityY);
+    return;
   }
-  drag = null; earth.classList.remove('dragging');
+  const target = locationAt(event);
+  if (target) {
+    point = target; placeKey = 'custom';
+    updateInspector(); queueDraw();
+  }
 });
-earth.addEventListener('lostpointercapture', () => { drag = null; earth.classList.remove('dragging'); });
+earth.addEventListener('pointercancel', releaseDrag);
+earth.addEventListener('lostpointercapture', releaseDrag);
 earth.addEventListener('pointerleave', () => { mapHover = null; updateMapReadout(); });
 earth.addEventListener('wheel', event => {
   if (view !== 'globe' || document.activeElement !== earth) return;
   event.preventDefault();
-  zoom = clamp(zoom * Math.exp(-event.deltaY * .001), 1, 2.6);
-  rasterMap = null; queueDraw();
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1;
+  const target = clamp((zoomTarget ?? zoom) * Math.exp(-event.deltaY * unit * .001), 1, 2.6);
+  animateCamera(...rotation, target, 130);
 }, {passive: false});
 earth.addEventListener('keydown', event => {
   if (view !== 'globe') return;
   const directions = {ArrowLeft: [-8,0], ArrowRight: [8,0], ArrowUp: [0,8], ArrowDown: [0,-8]};
   const direction = directions[event.key];
   if (direction) {
-    event.preventDefault(); rotate(rotation[0] + direction[0], rotation[1] + direction[1]);
+    event.preventDefault();
+    animateCamera(rotation[0] + direction[0], clamp(rotation[1] + direction[1], -89, 89), zoom, 150);
   } else if (event.key === 'Enter') {
-    point = [-rotation[0], -rotation[1]]; placeKey = 'custom'; $('place').value = placeKey;
+    point = [-rotation[0], -rotation[1]]; placeKey = 'custom';
     updateInspector(); queueDraw();
   }
 });
 
 function changeView(next) {
+  if (view === next && rendered) return;
+  stopCamera();
   view = next;
   mapHover = null;
   updateMapReadout();
@@ -616,11 +781,14 @@ function changeView(next) {
   $('recenter').hidden = view === 'map';
   $('map').dataset.view = view;
   rasterMap = null;
-  queueDraw();
+  queueDraw(200);
 }
 
 $('place').addEventListener('change', event => {
-  placeKey = event.target.value;
+  const selected = event.target.value;
+  if (!selected) return;
+  event.target.value = '';
+  placeKey = selected;
   point = places[placeKey].slice(1);
   recenter(); updateInspector();
 });
