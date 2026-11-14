@@ -13,6 +13,9 @@ const rasterCtx = raster.getContext('2d');
 const NO_DATA_COLOR = [88, 99, 107];
 const DEFAULT_PLACE = {name: 'Canadian Arctic', region: 'Canada', lon: -95, lat: 74, kind: 'region'};
 let cities = [DEFAULT_PLACE];
+let countryFeatures = [];
+let provinces = [];
+let majorCities = [];
 const themes = {
   temperature: ['#3267a5', '#80b8ce', '#eeeacb', '#e28b53', '#af3a2d'],
   water: ['#a14d2c', '#d49c67', '#eeeacb', '#73b5a5', '#28786f'],
@@ -152,7 +155,7 @@ function selectLayer(key) {
   return selectDate(index);
 }
 
-async function selectDate(index) {
+async function selectDate(index, {scrub = false} = {}) {
   const entry = timeline[index];
   if (!entry) return false;
   const {period} = entry;
@@ -166,7 +169,7 @@ async function selectDate(index) {
   updateTimeline();
 
   if (active?.key === layer && active.period === period) {
-    update(160);
+    update(scrub ? 0 : 160, {scrub});
     return true;
   }
   active = null;
@@ -266,7 +269,7 @@ function updateTimeline() {
   $('next').setAttribute('aria-label', 'Next ' + unit);
 }
 
-function update(fade = 0) {
+function update(fade = 0, {scrub = false} = {}) {
   if (!active) return;
   const idx = yearIndex();
   const climate = active.values.subarray(idx * active.size, (idx + 1) * active.size);
@@ -285,7 +288,9 @@ function update(fade = 0) {
   $('legend-min').textContent = '≤ −' + scale;
   $('legend-max').textContent = '≥ +' + scale;
   $('ramp').style.background = 'linear-gradient(90deg,' + themes[themeFor(active)].join(',') + ')';
-  updateInspector();
+  // The chart is the slow part. While the thumb is moving, keep the map in step
+  // and paint the chart once the year is released.
+  if (!scrub) updateInspector();
   queueDraw(fade);
 }
 
@@ -1086,10 +1091,133 @@ earth.addEventListener('wheel', event => {
   animateCamera(...rotation, target, 130);
   updateViewTools();
 }, {passive: false});
+function kmBetween(lon1, lat1, lon2, lat2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function compassFrom(lon, lat, city) {
+  const toRad = Math.PI / 180;
+  const dLon = (lon - city.lon) * toRad;
+  const lat1 = city.lat * toRad;
+  const lat2 = lat * toRad;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return names[Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360 / 45) % 8];
+}
+
+function featureHits(features, lon, lat) {
+  for (const feature of features) {
+    const box = feature.bbox;
+    if (box && (lon < box[0] || lat < box[1] || lon > box[2] || lat > box[3])) continue;
+    if (d3.geoContains(feature, [lon, lat])) return feature;
+  }
+  return null;
+}
+
+function rememberBounds(feature) {
+  let minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
+  const walk = coordinates => {
+    if (typeof coordinates[0] === 'number') {
+      minLon = Math.min(minLon, coordinates[0]);
+      maxLon = Math.max(maxLon, coordinates[0]);
+      minLat = Math.min(minLat, coordinates[1]);
+      maxLat = Math.max(maxLat, coordinates[1]);
+      return;
+    }
+    coordinates.forEach(walk);
+  };
+  walk(feature.geometry.coordinates);
+  feature.bbox = [minLon, minLat, maxLon, maxLat];
+  return feature;
+}
+
+function oceanName(lon, lat) {
+  const x = wrap(lon);
+  if (lat > 66) return 'Arctic Ocean';
+  if (lat < -55) return 'Southern Ocean';
+  if (x >= -100 && x <= -5 && lat >= 0 && lat <= 70) return 'North Atlantic';
+  if (x >= -70 && x <= 20 && lat < 0 && lat >= -55) return 'South Atlantic';
+  if (x >= 100 || x <= -100) return lat >= 0 ? 'North Pacific' : 'South Pacific';
+  if (x > 20 && x < 120 && lat < 30) return 'Indian Ocean';
+  return lat >= 0 ? 'North Atlantic' : 'South Atlantic';
+}
+
+function onLand(lon, lat) {
+  return Boolean(land && d3.geoContains(land, [lon, lat]));
+}
+
+function cityWeight(city) {
+  const pop = city.pop || 1;
+  if (city.cap === 2) return Math.max(pop, 1500000) * 3;
+  if (city.cap === 1) return Math.max(pop, 150000) * 1.7;
+  return pop;
+}
+
+function nearestCityPhrase(lon, lat) {
+  let closest = null;
+  let closestKm = Infinity;
+  for (const city of majorCities) {
+    const km = kmBetween(lon, lat, city.lon, city.lat);
+    if (km < closestKm) {
+      closestKm = km;
+      closest = city;
+    }
+  }
+  if (!closest) return '';
+  // Among cities almost as close, prefer a capital, then a larger city.
+  const windowKm = Math.max(closestKm * 1.35, closestKm + 40);
+  let chosen = closest;
+  let chosenKm = closestKm;
+  let best = cityWeight(closest) / (closestKm + 25);
+  for (const city of majorCities) {
+    const km = kmBetween(lon, lat, city.lon, city.lat);
+    if (km > windowKm) continue;
+    const score = cityWeight(city) / (km + 25);
+    if (score > best) {
+      best = score;
+      chosen = city;
+      chosenKm = km;
+    }
+  }
+  const km = Math.round(chosenKm);
+  return km < 45 ? chosen.name : km + ' km ' + compassFrom(lon, lat, chosen) + ' of ' + chosen.name;
+}
+
+// Name a clicked cell by the nearest major city, plus the province and country
+// the point actually falls in. Open water, Antarctica, and the poles are named
+// as those places first.
+function locateCell(lon, lat) {
+  if (lat >= 85) return 'North Pole · Arctic Ocean';
+  if (lat <= -85) return 'South Pole · Antarctica';
+  const landHit = onLand(lon, lat);
+  if (!landHit) {
+    const ocean = oceanName(lon, lat);
+    const near = nearestCityPhrase(lon, lat);
+    return near ? ocean + ' · ' + near : ocean;
+  }
+  const country = featureHits(countryFeatures, lon, lat)?.properties.name || '';
+  if (country === 'Antarctica' || lat <= -60) {
+    if (lat <= -85) return 'South Pole · Antarctica';
+    return 'Antarctica';
+  }
+  const province = featureHits(provinces, lon, lat)?.properties;
+  const regionName = province && province.admin === country ? province.name : '';
+  const region = [regionName, country].filter(Boolean).join(', ');
+  const near = nearestCityPhrase(lon, lat);
+  if (!near) return region || 'Land';
+  return region ? near + ' · ' + region : near;
+}
+
 function selectMapCell(location) {
   clearChartInterval();
   point = location;
-  placeName = 'Selected grid cell';
+  placeName = locateCell(location[0], location[1]);
   $('place-query').value = '';
   updateInspector();
   queueDraw();
@@ -1302,8 +1430,9 @@ $('period').addEventListener('change', event => {
 });
 $('year').addEventListener('input', event => {
   stop();
-  selectDate(Number(event.target.value));
+  selectDate(Number(event.target.value), {scrub: true});
 });
+$('year').addEventListener('change', () => { if (active) update(120); });
 $('play').addEventListener('click', play);
 $('previous').addEventListener('click', () => { stop(); selectDate(timelineIndex - 1); });
 $('next').addEventListener('click', () => { stop(); selectDate(timelineIndex + 1); });
@@ -1454,7 +1583,7 @@ $('chart-png').addEventListener('click', () => {
   paintChart(g, pad, 190, W - 2 * pad, H - 190 - 86, {dark, k, interactive: false});
   g.fillStyle = c.text; g.font = '18px "IBM Plex Sans", sans-serif';
   g.fillText('Data: ' + active.agency + ', ' + active.product + '. ' + active.source, pad, H - 34);
-  g.textAlign = 'right'; g.fillText('Earth Trend Atlas', W - pad, H - 34);
+  g.textAlign = 'right'; g.fillText('GQ Atlas', W - pad, H - 34);
   canvas.toBlob(blob => saveBlob(blob, exportName('chart', 'png')), 'image/png');
 });
 
@@ -1470,7 +1599,7 @@ $('map-png').addEventListener('click', () => {
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   g.fillText((mode === 'trend' ? 'Change per decade' : 'Anomaly relative to ' + active.reference) +
     '. Color scale −' + scale + ' to +' + scale + ' ' + active.unit + '.', 24, 74);
-  g.fillText('Data: ' + active.agency + ', ' + active.product + '. Earth Trend Atlas.', 24, canvas.height - 20);
+  g.fillText('Data: ' + active.agency + ', ' + active.product + '. GQ Atlas.', 24, canvas.height - 20);
   canvas.toBlob(blob => saveBlob(blob, [layer, mode, $('map-year').textContent.replace(/\s+/g, '-'), 'map'].join('-') + '.png'), 'image/png');
 });
 
@@ -1564,11 +1693,14 @@ try {
     loadDataset(layer, 'annual').catch(() => {});
     return loaded;
   });
-  [catalog, land, borders, cities] = await Promise.all([catalogReady,
-    ...['land.json', 'countries.json', 'cities.json'].map(async file => (await fetchAsset(file)).json())]);
+  let admin1;
+  [catalog, land, borders, cities, majorCities, admin1] = await Promise.all([catalogReady,
+    ...['land.json', 'countries.json', 'cities.json', 'major-cities.json', 'admin1.json'].map(async file => (await fetchAsset(file)).json())]);
   d3 = window.d3;
   globe = d3.geoOrthographic().clipAngle(90);
   flatMap = d3.geoEquirectangular();
+  countryFeatures = window.topojson.feature(borders, borders.objects.countries).features.map(rememberBounds);
+  provinces = admin1.features.map(rememberBounds);
   land = window.topojson.feature(land, land.objects.land);
   borders = window.topojson.mesh(borders, borders.objects.countries, (a, b) => a !== b);
   populateLayers();

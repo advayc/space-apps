@@ -1,6 +1,8 @@
 :root{color-scheme:light;--paper:#f2f0e9;--card:#faf9f4;--ink:#172721;--muted:#55635a;--line:#d8dad0;--accent:#22634a;--mono:"IBM Plex Mono",ui-monospace,monospace;--display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;--ui:"IBM Plex Sans",system-ui,sans-serif;--proj:#6a4fd0;--deep:#0b191d}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui)}
+::selection{background:#c5dece;color:var(--ink)}
+[data-theme=dark] ::selection{background:#2c6a4c;color:var(--ink)}
 button,select,input{font:inherit}
 button,select{cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible,canvas:focus-visible,a:focus-visible{outline:3px solid #5a9c76;outline-offset:3px}
@@ -236,11 +238,11 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .time-zones{position:absolute;left:8px;right:8px;top:50%;height:4px;margin-top:-2px;display:flex;border-radius:2px;overflow:hidden;pointer-events:none}
 .zone-obs{flex:1;background:color-mix(in srgb,var(--accent) 55%,var(--card))}
 .zone-proj{flex:none;background:var(--proj)}
-#year{position:relative;appearance:none;-webkit-appearance:none;background:transparent;--thumb:var(--accent)}
+#year{position:relative;appearance:none;-webkit-appearance:none;background:transparent;--thumb:var(--accent);cursor:pointer}
 #year::-webkit-slider-runnable-track{height:20px;background:transparent}
 #year::-moz-range-track{height:20px;background:transparent}
-#year::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:2px;border-radius:50%;border:2px solid var(--card);background:var(--thumb);box-shadow:0 0 0 1px var(--thumb)}
-#year::-moz-range-thumb{width:13px;height:13px;border-radius:50%;border:2px solid var(--card);background:var(--thumb);box-shadow:0 0 0 1px var(--thumb)}
+#year::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:2px;border-radius:50%;border:2px solid var(--card);background:var(--thumb);box-shadow:0 0 0 1px var(--thumb);cursor:pointer}
+#year::-moz-range-thumb{width:13px;height:13px;border-radius:50%;border:2px solid var(--card);background:var(--thumb);box-shadow:0 0 0 1px var(--thumb);cursor:pointer}
 .timeline.is-projected #year{--thumb:var(--proj)}
 .timeline.is-projected .time-head output{color:var(--proj)}
 .time-ticks.with-future{position:relative;height:14px;display:block;margin:0 8px}

@@ -1,4 +1,4 @@
-# Earth Trend Atlas
+# GQ Atlas
 
 A simple tool for exploring how Earth’s climate has changed over time.
 
@@ -6,7 +6,7 @@ Pick a variable (temperature, rainfall, ice, and more), choose a place, and see 
 
 Live site: [space.advay.ca](https://space.advay.ca)
 
-![Earth Trend Atlas overview](docs/atlas-overview.png)
+![GQ Atlas overview](docs/atlas-overview.png)
 
 ![30-year trend view](docs/atlas-trend.png)
 
