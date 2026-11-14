@@ -38,10 +38,13 @@ function rgb(hex) {
 }
 
 let catalog, land, borders, d3, globe, projection;
-let layer = 'temperature', view = 'globe', mode = 'annual', year = 2025;
+let layer = 'temperature', view = 'map', mode = 'annual', year = 2025;
 let rotation = [93, -46], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
+let flatMap, flatZoom = 1, flatOffset = [0, 0];
+const MAX_FLAT_ZOOM = 16;
+const FLAT_ZOOM_STEP = 1.5;
 let chartData, chartCursor, chartLayout;
 let intervalAnchor = null, intervalEnd = null;
 let placeMatches = [], placeActive = -1;
@@ -305,9 +308,14 @@ function geometry() {
     projection = globe;
     mapBounds = [Math.max(0, cx - scale), Math.max(0, cy - scale), Math.min(width, cx + scale), Math.min(height, cy + scale)];
   } else {
-    const mapWidth = Math.min(width - 18, (height - 16) * 2);
-    projection = d3.geoEquirectangular().translate([cx, cy]).scale(mapWidth / (2 * Math.PI));
-    mapBounds = [cx - mapWidth / 2, cy - mapWidth / 4, cx + mapWidth / 2, cy + mapWidth / 4];
+    const [mapWidth, mapHeight] = constrainFlatOffset();
+    const x = cx + flatOffset[0], y = cy + flatOffset[1];
+    flatMap.translate([x, y]).scale(mapWidth / (2 * Math.PI)).clipExtent([[0, 0], [width, height]]);
+    projection = flatMap;
+    mapBounds = [
+      Math.max(0, x - mapWidth / 2), Math.max(0, y - mapHeight / 2),
+      Math.min(width, x + mapWidth / 2), Math.min(height, y + mapHeight / 2)
+    ];
   }
 }
 
@@ -362,7 +370,7 @@ function drawMap(fade) {
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, width, height);
   }
-  const moving = view === 'globe' && Boolean(drag?.moved || cameraFrame);
+  const moving = Boolean(drag?.moved || cameraFrame);
   if (!rasterMap || rasterMap.moving !== moving) rasterMap = mapRaster(moving);
   const {indices, shade, image} = rasterMap;
   const colors = palette[themeFor(active)];
@@ -741,7 +749,57 @@ function coast(velocityX, velocityY) {
   cameraFrame = requestAnimationFrame(step);
 }
 
+function flatWorldWidth() {
+  return Math.max(1, Math.min(width - 18, (height - 16) * 2)) * flatZoom;
+}
+
+function constrainFlatOffset() {
+  const mapWidth = flatWorldWidth();
+  const mapHeight = mapWidth / 2;
+  const maxX = Math.max(0, (mapWidth - width) / 2);
+  const maxY = Math.max(0, (mapHeight - height) / 2);
+  flatOffset = [clamp(flatOffset[0], -maxX, maxX), clamp(flatOffset[1], -maxY, maxY)];
+  return [mapWidth, mapHeight];
+}
+
+function updateFlatMap() {
+  constrainFlatOffset();
+  earth.classList.toggle('grab', flatZoom > 1);
+  $('map-zoom-out').disabled = flatZoom === 1;
+  $('map-zoom-in').disabled = flatZoom === MAX_FLAT_ZOOM;
+  $('map-zoom-reset').disabled = flatZoom === 1;
+  mapHover = null;
+  updateMapReadout();
+  finishMapFade();
+  rasterMap = null;
+  queueDraw();
+}
+
+function zoomFlatMap(factor, x = width / 2, y = height / 2) {
+  if (view !== 'map' || !width || !height) return;
+  const nextZoom = clamp(flatZoom * factor, 1, MAX_FLAT_ZOOM);
+  if (nextZoom === flatZoom) return;
+  const scale = nextZoom / flatZoom;
+  const dx = x - width / 2, dy = y - height / 2;
+  flatOffset = [dx + (flatOffset[0] - dx) * scale, dy + (flatOffset[1] - dy) * scale];
+  flatZoom = nextZoom;
+  updateFlatMap();
+}
+
+function resetFlatMap() {
+  flatZoom = 1;
+  flatOffset = [0, 0];
+  updateFlatMap();
+}
+
 function recenter() {
+  if (view === 'map' && width && height) {
+    flatZoom = Math.max(3, flatZoom);
+    const mapWidth = flatWorldWidth();
+    flatOffset = [-point[0] * mapWidth / 360, point[1] * mapWidth / 360];
+    updateFlatMap();
+    return;
+  }
   animateCamera(-point[0], -point[1], 1, 420);
 }
 
@@ -756,6 +814,7 @@ reducedMotion.addEventListener('change', () => {
 
 function locationAt(event) {
   if (!active || !projection || !mapBounds) return null;
+  if (!rasterMap) geometry();
   const rect = earth.getBoundingClientRect();
   const x = event.clientX - rect.left, y = event.clientY - rect.top;
   const [left, top, right, bottom] = mapBounds;
@@ -783,7 +842,7 @@ earth.addEventListener('pointerdown', event => {
   stopCamera();
   finishMapFade();
   drag = {id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX,
-    lastY: event.clientY, time: event.timeStamp, velocityX: 0, velocityY: 0, moved: false, rotation,
+    lastY: event.clientY, time: event.timeStamp, velocityX: 0, velocityY: 0, moved: false, rotation, flatOffset,
     degreesPerPixel: 180 / Math.PI / Math.max(1, projection?.scale() ?? 150)};
   earth.setPointerCapture(event.pointerId);
   mapHover = null;
@@ -794,7 +853,11 @@ earth.addEventListener('pointermove', event => {
   if (drag) {
     const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
     if (Math.hypot(dx, dy) > 4) drag.moved = true;
-    if (drag.moved && view === 'globe') {
+    if (drag.moved && view === 'map' && flatZoom > 1) {
+      earth.classList.add('dragging');
+      flatOffset = [drag.flatOffset[0] + dx, drag.flatOffset[1] + dy];
+      updateFlatMap();
+    } else if (drag.moved && view === 'globe') {
       const scale = drag.degreesPerPixel;
       const elapsed = Math.max(1, event.timeStamp - drag.time);
       drag.velocityX = clamp((event.clientX - drag.lastX) * scale / elapsed, -.4, .4);
@@ -825,35 +888,66 @@ earth.addEventListener('pointerup', event => {
     return;
   }
   const target = locationAt(event);
-  if (target) {
-    clearChartInterval();
-    point = target; placeName = 'Selected grid cell';
-    $('place-query').value = '';
-    updateInspector(); queueDraw();
-  }
+  if (target) selectMapCell(target);
 });
 earth.addEventListener('pointercancel', releaseDrag);
 earth.addEventListener('lostpointercapture', releaseDrag);
 earth.addEventListener('pointerleave', () => { mapHover = null; updateMapReadout(); });
 earth.addEventListener('wheel', event => {
-  if (view !== 'globe' || document.activeElement !== earth) return;
+  if (!width || !height || drag || document.activeElement !== earth || event.ctrlKey || event.metaKey) return;
   event.preventDefault();
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? height : 1;
+  if (view === 'map') {
+    const rect = earth.getBoundingClientRect();
+    zoomFlatMap(Math.exp(-event.deltaY * unit * .002), event.clientX - rect.left, event.clientY - rect.top);
+    return;
+  }
   const target = clamp((zoomTarget ?? zoom) * Math.exp(-event.deltaY * unit * .001), 1, 2.6);
   animateCamera(...rotation, target, 130);
 }, {passive: false});
+function selectMapCell(location) {
+  clearChartInterval();
+  point = location;
+  placeName = 'Selected grid cell';
+  $('place-query').value = '';
+  updateInspector();
+  queueDraw();
+}
+
 earth.addEventListener('keydown', event => {
-  if (view !== 'globe') return;
+  if (event.key === 'Enter' && active && projection) {
+    event.preventDefault();
+    if (view === 'map') {
+      geometry();
+      selectMapCell(projection.invert([width / 2, height / 2]));
+    } else {
+      selectMapCell([-rotation[0], -rotation[1]]);
+    }
+    return;
+  }
+  if (view === 'map') {
+    const pan = {ArrowLeft: [48, 0], ArrowRight: [-48, 0], ArrowUp: [0, 48], ArrowDown: [0, -48]}[event.key];
+    if (pan && flatZoom > 1) {
+      event.preventDefault();
+      flatOffset = [flatOffset[0] + pan[0], flatOffset[1] + pan[1]];
+      updateFlatMap();
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomFlatMap(FLAT_ZOOM_STEP);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      zoomFlatMap(1 / FLAT_ZOOM_STEP);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      resetFlatMap();
+    }
+    return;
+  }
   const directions = {ArrowLeft: [-8,0], ArrowRight: [8,0], ArrowUp: [0,8], ArrowDown: [0,-8]};
   const direction = directions[event.key];
   if (direction) {
     event.preventDefault();
     animateCamera(rotation[0] + direction[0], clamp(rotation[1] + direction[1], -89, 89), zoom, 150);
-  } else if (event.key === 'Enter') {
-    clearChartInterval();
-    point = [-rotation[0], -rotation[1]]; placeName = 'Selected grid cell';
-    $('place-query').value = '';
-    updateInspector(); queueDraw();
   }
 });
 
@@ -864,11 +958,12 @@ function changeView(next) {
   mapHover = null;
   updateMapReadout();
   for (const button of document.querySelectorAll('[data-view]')) button.setAttribute('aria-pressed', button.dataset.view === view);
-  earth.classList.toggle('grab', view === 'globe');
+  earth.classList.toggle('grab', view === 'globe' || flatZoom > 1);
   earth.setAttribute('aria-label', view === 'globe'
     ? 'Climate globe. Use arrow keys to rotate and Enter to select the center cell. Click a cell to select it.'
-    : 'Flat climate map. Click a cell to select it, or use the location menu.');
-  $('recenter').hidden = view === 'map';
+    : 'Flat climate map. Use plus and minus to zoom, drag or use arrows to pan, and press Enter to inspect the center cell.');
+  $('flat-tools').hidden = view !== 'map';
+  if (view === 'map' && width && height) updateFlatMap();
   $('map').dataset.view = view;
   rasterMap = null;
   queueDraw(200);
@@ -1017,6 +1112,9 @@ $('play').addEventListener('click', play);
 $('previous').addEventListener('click', () => { stop(); selectDate(timelineIndex - 1); });
 $('next').addEventListener('click', () => { stop(); selectDate(timelineIndex + 1); });
 $('recenter').addEventListener('click', recenter);
+$('map-zoom-in').addEventListener('click', () => zoomFlatMap(FLAT_ZOOM_STEP));
+$('map-zoom-out').addEventListener('click', () => zoomFlatMap(1 / FLAT_ZOOM_STEP));
+$('map-zoom-reset').addEventListener('click', resetFlatMap);
 $('csv').addEventListener('click', () => {
   if (!active) return;
   const {index, center} = cell(point);
@@ -1057,6 +1155,7 @@ try {
   );
   d3 = window.d3;
   globe = d3.geoOrthographic().clipAngle(90);
+  flatMap = d3.geoEquirectangular();
   land = window.topojson.feature(land, land.objects.land);
   borders = window.topojson.mesh(borders, borders.objects.countries, (a, b) => a !== b);
   populateLayers();
