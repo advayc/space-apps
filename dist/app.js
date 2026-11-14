@@ -1,4 +1,4 @@
-import { WINDOW, slopeAt, trend, forecast, extendGrid } from './statistics.js';
+import { WINDOW, BAND_SCALE, slopeAt, trend, forecast, extendGrid } from './statistics.js';
 import { months, seasons, dateLabel, makeTimeline, nearestIndex, futureYears } from './timeline.js';
 
 const $ = id => document.getElementById(id);
@@ -126,7 +126,7 @@ async function loadDataset(key, period) {
     const size = info.width * info.height;
     const future = futureYears(entry.years);
     return { ...info, years: entry.years.concat(future), observed: entry.years.length,
-      values: extendGrid(values, size, entry.years.length, future.length), size };
+      values: extendGrid(values, size, entry.years.length, future.length, future[0]), size };
   })().catch(error => {
     if (datasets.get(cacheKey) === request) datasets.delete(cacheKey);
     throw error;
@@ -448,19 +448,27 @@ function updateInspector() {
   const {index, center} = cell(point);
   const series = history(index);
   const idx = yearIndex();
-  const current = series[idx];
   // For projected years the trend shown is the one the projection continues.
   const basis = Math.min(idx, active.observed - 1);
   const estimate = trend(series, basis);
   const basisYear = active.years[basis];
   const steps = active.years.length - active.observed;
-  const future = steps ? forecast(series, active.observed - 1, steps) : null;
+  const future = steps ? forecast(series, active.observed - 1, steps, active.years[active.observed]) : null;
+  // Measured values, then the central projection (the map shows the simulated year instead).
+  const central = future ? series.map((value, i) => i < active.observed ? value : future[i - active.observed].value) : series;
+  const range = projectedNow && future ? future[idx - active.observed] : null;
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
   $('value-label').textContent = labelForYear(year) + (projectedNow ? ' projected anomaly' : ' anomaly');
   $('value').classList.toggle('is-projected', projectedNow);
-  setMetric($('value'), current, active.unit);
+  setMetric($('value'), central[idx], active.unit);
+  if (range) {
+    const error = document.createElement('small');
+    error.className = 'pm';
+    error.textContent = '± ' + ((range.high - range.low) / 2).toFixed(2) + ' (95% range)';
+    $('value').append(error);
+  }
   setMetric($('slope'), estimate?.rate, active.unit);
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
     ', measured from ' + active.years[0] + ' to ' + active.years[active.observed - 1] +
@@ -482,11 +490,11 @@ function updateInspector() {
       ? mathExpression(mathToken('mo', '<'), mathNumber(.001, 3, false))
       : mathExpression(mathNumber(estimate.p, Math.abs(estimate.p - .05) < .001 ? 4 : 3, false)));
     $('inference').textContent = (estimate.p < .05 ? 'Significant at 5%' : 'Not significant at 5%') +
-      (projectedNow ? '. The ' + year + ' value continues this trend and is an estimate, not a measurement.' : '');
+      (projectedNow ? '. The ' + year + ' value is an estimate built on this trend, not a measurement.' : '');
   } else {
     $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
   }
-  chartData = {series, idx, estimate, basis, future};
+  chartData = {series, central, idx, estimate, basis, future};
   updateChartInterval();
   drawChart();
 }
@@ -537,7 +545,7 @@ function chartColors(dark) {
 // Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
 // strokes and type so the same routine serves the panel and the PNG export.
 function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
-  const {series, idx, estimate, basis, future} = chartData;
+  const {series, central, idx, estimate, basis, future} = chartData;
   const c = chartColors(dark);
   const observedCount = active.observed;
   const finite = series.filter(Number.isFinite);
@@ -598,31 +606,36 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.strokeStyle = c.fit; g.lineWidth = 1.5 * k; g.stroke();
   }
   if (future) {
-    const anchor = trend(series, observedCount - 1);
+    // One simulated path with year-to-year swings, then the central estimate.
     g.beginPath();
-    g.moveTo(lastX, y(anchor.mean + anchor.slope * (WINDOW - 1) / 2));
+    g.moveTo(lastX, y(series[observedCount - 1]));
+    for (let i = observedCount; i < series.length; i++) g.lineTo(x(i), y(series[i]));
+    g.globalAlpha = .55; g.strokeStyle = c.proj; g.lineWidth = k; g.stroke(); g.globalAlpha = 1;
+    g.beginPath();
     future.forEach((f, i) => g.lineTo(x(observedCount + i), y(f.value)));
     g.strokeStyle = c.proj; g.lineWidth = 1.6 * k; g.setLineDash([5 * k, 3 * k]); g.stroke(); g.setLineDash([]);
   }
   const marker = idx >= observedCount ? c.proj : c.marker;
   g.beginPath(); g.moveTo(x(idx), top); g.lineTo(x(idx), bottom);
   g.strokeStyle = marker; g.lineWidth = k; g.setLineDash([3 * k, 3 * k]); g.stroke(); g.setLineDash([]);
-  if (Number.isFinite(series[idx])) {
-    g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5 * k, 0, Math.PI * 2);
+  if (Number.isFinite(central[idx])) {
+    g.beginPath(); g.arc(x(idx), y(central[idx]), 3.5 * k, 0, Math.PI * 2);
     g.fillStyle = idx >= observedCount ? c.proj : c.dot; g.fill();
   }
   return {left, right, bottom, top, x, y, c};
 }
 
 function chartPointLabel(index) {
-  const {series} = chartData;
-  return labelForYear(active.years[index]) + ' · ' + (Number.isFinite(series[index])
-    ? signed(series[index]) + ' ' + active.unit + (index >= active.observed ? ' (projected)' : '') : 'No data');
+  const {central, future} = chartData;
+  if (!Number.isFinite(central[index])) return labelForYear(active.years[index]) + ' · No data';
+  const f = index >= active.observed ? future?.[index - active.observed] : null;
+  return labelForYear(active.years[index]) + ' · ' + signed(central[index]) + ' ' + active.unit +
+    (f ? ' ± ' + ((f.high - f.low) / 2).toFixed(2) + ' (projected)' : '');
 }
 
 function drawChart() {
   if (!active || !chartData) return;
-  const {series, idx} = chartData;
+  const {series, central, idx} = chartData;
   const g = chart.getContext('2d');
   const [w, h] = sizeCanvas(chart);
   g.clearRect(0, 0, w, h);
@@ -642,8 +655,8 @@ function drawChart() {
     const px = x(endpoint);
     g.beginPath(); g.moveTo(px, top); g.lineTo(px, bottom);
     g.lineWidth = 1.5; g.strokeStyle = c.interval; g.stroke();
-    if (Number.isFinite(series[endpoint])) {
-      g.beginPath(); g.arc(px, y(series[endpoint]), 4.5, 0, Math.PI * 2);
+    if (Number.isFinite(central[endpoint])) {
+      g.beginPath(); g.arc(px, y(central[endpoint]), 4.5, 0, Math.PI * 2);
       g.fillStyle = c.interval; g.fill();
     }
   }
@@ -651,8 +664,8 @@ function drawChart() {
     const cursorX = x(inspected);
     g.beginPath(); g.moveTo(cursorX, top); g.lineTo(cursorX, bottom);
     g.strokeStyle = c.text; g.lineWidth = 1; g.stroke();
-    if (Number.isFinite(series[inspected])) {
-      g.beginPath(); g.arc(cursorX, y(series[inspected]), 4.5, 0, Math.PI * 2);
+    if (Number.isFinite(central[inspected])) {
+      g.beginPath(); g.arc(cursorX, y(central[inspected]), 4.5, 0, Math.PI * 2);
       g.fillStyle = inspected >= active.observed ? c.proj : c.cursor; g.fill();
     }
     tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
@@ -689,8 +702,8 @@ function updateChartInterval() {
   const end = Math.max(intervalAnchor, intervalEnd);
   const startYear = active.years[start];
   const endYear = active.years[end];
-  const startValue = chartData.series[start];
-  const endValue = chartData.series[end];
+  const startValue = chartData.central[start];
+  const endValue = chartData.central[end];
   $('interval-summary').textContent = startYear + '–' + endYear + ' · ' +
     (endYear - startYear) + (endYear - startYear === 1 ? ' year' : ' years') +
     (end >= active.observed ? ' · includes projected values' : '');
@@ -923,7 +936,7 @@ function updateMapReadout() {
   const {index, center} = cell(mapHover);
   const value = grid[index];
   output.textContent = coords(center) + ' · ' + (Number.isFinite(value)
-    ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : projectedNow ? ' (projected)' : '')
+    ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : projectedNow ? ' (projected, one possible year)' : '')
     : 'No data');
 }
 earth.addEventListener('pointerdown', event => {
@@ -1221,7 +1234,6 @@ function exportName(kind, extension) {
 function exportRows() {
   const {center} = cell(point);
   const {series, estimate, basis, future} = chartData;
-  const anchor = future ? trend(series, active.observed - 1) : null;
   const fitted = (fit, end, i) => fit && i > end - WINDOW && i <= end
     ? fit.mean + fit.slope * (i - (end - (WINDOW - 1) / 2)) : null;
   return active.years.map((y, i) => {
@@ -1231,8 +1243,9 @@ function exportRows() {
       year: y, period: periodKey(), kind: projected ? 'projected' : 'observed',
       anomaly: !projected && Number.isFinite(series[i]) ? series[i] : null,
       trend_line: fitted(estimate, basis, i),
-      projection: f ? f.value : fitted(anchor, active.observed - 1, i),
+      projection: f?.value ?? null,
       projection_low_95: f?.low ?? null, projection_high_95: f?.high ?? null,
+      projection_one_possible_year: f ? series[i] : null,
       unit: active.unit, latitude: center[1], longitude: center[0],
     };
   });
@@ -1240,7 +1253,7 @@ function exportRows() {
 
 function trendSummary() {
   const {center} = cell(point);
-  const {series, estimate, basis, future} = chartData;
+  const {series, central, estimate, basis, future} = chartData;
   const basisYear = active.years[basis];
   const lastYear = active.years[active.observed - 1];
   const round = value => value == null || !Number.isFinite(value) ? null : Number(value.toFixed(5));
@@ -1249,7 +1262,7 @@ function trendSummary() {
     layer: active.name, period: periodKey(), unit: active.unit, baseline: active.reference,
     database: {agency: active.agency, product: active.product, page: active.source, original_file: active.download},
     record: {first_year: active.years[0], last_year: lastYear},
-    selected_year: {year, kind: projectedNow ? 'projected' : 'observed', anomaly: round(series[yearIndex()])},
+    selected_year: {year, kind: projectedNow ? 'projected' : 'observed', anomaly: round(central[yearIndex()])},
     trend: estimate && {
       method: 'Ordinary least squares over 30 consecutive years; Newey-West standard error, 3 lags',
       window: [basisYear - WINDOW + 1, basisYear],
@@ -1260,10 +1273,13 @@ function trendSummary() {
       significant_at_5_percent: estimate.p == null ? null : estimate.p < .05,
     },
     projection: future && {
-      method: 'Trend line of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued; 95% prediction interval, Student t with 28 degrees of freedom',
+      method: 'Trend of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued, damped by 1 - 1/t^2 when weak; ' +
+        '95% range is the Student t prediction interval (28 degrees of freedom) widened by ' + BAND_SCALE + ' after a hindcast test',
+      trend_weight: round(future[0].weight),
+      one_possible_year: 'value plus the departure from trend of a past year in the window; this is what the map shows',
       caution: 'Statistical extrapolation of past data. Not a climate model forecast.',
-      values: future.map((f, i) => ({year: active.years[active.observed + i],
-        value: round(f.value), low_95: round(f.low), high_95: round(f.high)})),
+      values: future.map((f, i) => ({year: active.years[active.observed + i], value: round(f.value),
+        low_95: round(f.low), high_95: round(f.high), one_possible_year: round(series[active.observed + i])})),
     },
     generated: new Date().toISOString(),
   };

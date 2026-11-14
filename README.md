@@ -14,7 +14,7 @@ Live site: [space.advay.ca](https://space.advay.ca)
 
 1. Type a city on the landing page, or open the world map.
 2. Choose a climate layer.
-3. Move the timeline. Years after the latest data are violet: they continue each cell's last 30-year trend to 2050.
+3. Move the timeline. Years after the latest data are violet: projections to 2050 with a 95% range, explained and tested on the [Projections](dist/projections/) page.
 4. Read the side panel for the anomaly, trend per decade, and significance.
 5. Download the series with its trend line and projection (CSV), the fit statistics (JSON), or the chart and map (PNG).
 
@@ -26,7 +26,7 @@ Every layer's dataset page and original NetCDF file are linked under **Where thi
 - **Anomaly** means difference from normal, not the absolute value.
 - **Trend per decade** is the average rate of change over about 30 years.
 - **Significant at 5%** means a flat (no-change) line is unlikely for that grid cell. It does not prove a cause.
-- **Projected** values are a straight-line extrapolation of past data, not a climate model forecast.
+- **Projected** values are a statistical estimate from past data with a stated error range, not a climate model forecast.
 - Cities jump to the **nearest coarse grid cell** (~2°), not a weather station.
 
 ## Run locally

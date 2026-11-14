@@ -47,46 +47,69 @@ function normalTwoSided(z) {
   return Math.min(1, 2 * Math.exp(-z * z / 2) * tail / Math.sqrt(2 * Math.PI));
 }
 
-// Straight-line projection: continue the least squares fit of the WINDOW values
-// ending at `end`. Returns one {value, low, high} per future step, where
-// low/high bound a 95% prediction interval for a single future value
-// (Student t, WINDOW - 2 degrees of freedom), or null if the window has gaps.
-const T_975 = 2.048407; // t quantile for 28 degrees of freedom
-export function forecast(values, end, steps) {
-  const slope = slopeAt(values, end);
+// ---- Projection ----
+// A projected year has three parts, all taken from the WINDOW values ending at `end`:
+//   1. the least squares trend, damped by 1 - 1/t² when it is weak relative to
+//      its own noise (t = slope / standard error; no trend at all when |t| <= 1);
+//   2. year-to-year swings: the departure from the trend line of one past year,
+//      the same past year for every cell so the map keeps real spatial patterns;
+//   3. a 95% range: the Student t prediction interval, widened by BAND_SCALE
+//      because a hindcast showed the textbook interval is too narrow.
+const T_975 = 2.048407; // t quantile for WINDOW - 2 = 28 degrees of freedom
+export const BAND_SCALE = 1.4;
+
+// Which year of the window lends its departure to a given future year.
+export function residualIndex(year) {
+  return (Math.imul(year, 2654435761) >>> 0) % WINDOW;
+}
+
+function fit(values, end, stride, offset) {
+  const slope = slopeAt(values, end, stride, offset);
   if (!Number.isFinite(slope)) return null;
+  const first = end - WINDOW + 1;
   let mean = 0;
-  for (let i = 0; i < WINDOW; i++) mean += values[end - WINDOW + 1 + i];
+  for (let i = 0; i < WINDOW; i++) mean += values[(first + i) * stride + offset];
   mean /= WINDOW;
-  let residual = 0;
+  let squares = 0;
   for (let i = 0; i < WINDOW; i++) {
-    const r = values[end - WINDOW + 1 + i] - mean - (i - center) * slope;
-    residual += r * r;
+    const r = values[(first + i) * stride + offset] - mean - (i - center) * slope;
+    squares += r * r;
   }
-  const sigma = Math.sqrt(residual / (WINDOW - 2));
+  const sigma = Math.sqrt(squares / (WINDOW - 2));
+  const t = sigma > 1e-12 ? slope / (sigma / Math.sqrt(spread)) : Infinity;
+  const weight = t * t > 1 ? 1 - 1 / (t * t) : 0;
+  return {mean, slope, sigma, weight, first};
+}
+
+// One {value, low, high, sim} per future step for a single series. `value` is
+// the central estimate, `sim` adds the borrowed year-to-year departure.
+export function forecast(values, end, steps, firstYear) {
+  const f = fit(values, end, 1, 0);
+  if (!f) return null;
   return Array.from({length: steps}, (_, k) => {
     const x = center + k + 1;
-    const value = mean + slope * x;
-    const half = T_975 * sigma * Math.sqrt(1 + 1 / WINDOW + x * x / spread);
-    return {value, low: value - half, high: value + half};
+    const value = f.mean + f.weight * f.slope * x;
+    const j = residualIndex(firstYear + k);
+    const half = BAND_SCALE * T_975 * f.sigma * Math.sqrt(1 + 1 / WINDOW + x * x / spread);
+    return {value, low: value - half, high: value + half, weight: f.weight,
+      sim: value + values[f.first + j] - f.mean - (j - center) * f.slope};
   });
 }
 
-// Append projected grids for every cell to a year-major value array.
-export function extendGrid(values, size, count, steps) {
+// Append simulated projected grids for every cell to a year-major value array.
+export function extendGrid(values, size, count, steps, firstYear) {
   if (steps <= 0 || count < WINDOW) return values;
   const out = new Float32Array((count + steps) * size);
   out.set(values);
   const end = count - 1;
+  const sources = Array.from({length: steps}, (_, k) => residualIndex(firstYear + k));
   for (let cell = 0; cell < size; cell++) {
-    const slope = slopeAt(values, end, size, cell);
-    let mean = 0;
-    if (Number.isFinite(slope)) {
-      for (let i = 0; i < WINDOW; i++) mean += values[(end - WINDOW + 1 + i) * size + cell];
-      mean /= WINDOW;
-    }
+    const f = fit(values, end, size, cell);
     for (let k = 0; k < steps; k++) {
-      out[(count + k) * size + cell] = Number.isFinite(slope) ? mean + slope * (center + k + 1) : NaN;
+      if (!f) { out[(count + k) * size + cell] = NaN; continue; }
+      const j = sources[k];
+      out[(count + k) * size + cell] = f.mean + f.weight * f.slope * (center + k + 1)
+        + values[(f.first + j) * size + cell] - f.mean - (j - center) * f.slope;
     }
   }
   return out;

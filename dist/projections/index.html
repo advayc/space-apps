@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How Earth Trend Atlas projects each place to 2050, and how far off those projections have been when tested.">
+<meta name="theme-color" content="#f2f0e9">
+<title>Projections | Earth Trend Atlas</title>
+<script src="../theme.js"></script>
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<main class="methods-page">
+  <nav class="methods-nav" aria-label="Page navigation">
+    <a class="utility" href="../"><span aria-hidden="true">←</span> Back to atlas</a>
+    <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
+  </nav>
+  <article class="methods">
+    <h1>Projections and their error</h1>
+    <section>
+      <h2>What a projected year is</h2>
+      <p>Years after the latest data are shown in violet, up to 2050. They are estimates made from each place’s own record. They are not output from a climate model, and they know nothing about emissions, physics, or limits such as sea ice reaching zero.</p>
+      <p>Every grid cell of every layer is projected separately, in three parts:</p>
+      <ol class="plain">
+        <li><b>The recent trend, trusted only as far as it has earned.</b> The atlas fits a straight line to the last 30 years. A strong, steady trend is carried forward almost in full. A trend that is small next to the year-to-year scatter is reduced, and one that is weaker than its own noise is dropped, so the place is projected to stay near its recent average.</li>
+        <li><b>Year-to-year swings.</b> Real years do not sit on a line. Each projected year borrows the departures from trend of one real year in the last 30, using the same year for the whole map, so warm and cool patches keep realistic shapes. This is what the map shows, and it is one possible year, not a prediction of that exact year.</li>
+        <li><b>A range.</b> The location chart and side panel show the central estimate with a 95% range around it. The range grows the further ahead you look.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>How far off it has been</h2>
+      <p>To measure the error, the method was run on the past. For each layer it was given 30 years of data ending 25 years before the latest year, then asked to project the years that followed, which could be checked against what was measured. Shorter records leave fewer years to check.</p>
+      <p>“Typical miss” is the median gap between the central estimate and the measured value across all grid cells. The no-change column is the miss from assuming each place simply stays at its 30-year average. The lower of the two is in bold.</p>
+      <div class="source-table-wrap">
+        <table class="source-table">
+          <thead><tr><th scope="col">Layer</th><th scope="col">Fitted to</th><th scope="col">Checked against</th><th scope="col">Typical miss, first 10 years</th><th scope="col">Typical miss, last 10 years</th><th scope="col">No-change guess, last 10 years</th><th scope="col">Measured values inside the 95% range</th></tr></thead>
+          <tbody>
+<tr><th scope="row">Surface temperature anomaly (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.34</td><td class="better">0.52</td><td>0.77</td><td>96%</td></tr>
+<tr><th scope="row">Precipitation (mm/day)</th><td>1979–2008</td><td>2009–2025</td><td>0.19</td><td class="better">0.22</td><td>0.22</td><td>98%</td></tr>
+<tr><th scope="row">Sea surface temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.24</td><td class="better">0.37</td><td>0.56</td><td>96%</td></tr>
+<tr><th scope="row">Atmospheric water vapor (kg/m²)</th><td>1971–2000</td><td>2001–2025</td><td>0.46</td><td>0.69</td><td class="better">0.66</td><td>93%</td></tr>
+<tr><th scope="row">Sea level air pressure (hPa)</th><td>1971–2000</td><td>2001–2025</td><td>0.71</td><td>0.87</td><td class="better">0.72</td><td>97%</td></tr>
+<tr><th scope="row">Wind speed at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.21</td><td>0.30</td><td class="better">0.24</td><td>95%</td></tr>
+<tr><th scope="row">East–west wind at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.33</td><td>0.43</td><td class="better">0.35</td><td>96%</td></tr>
+<tr><th scope="row">North–south wind at 10 m (m/s)</th><td>1971–2000</td><td>2001–2025</td><td>0.29</td><td>0.37</td><td class="better">0.31</td><td>95%</td></tr>
+<tr><th scope="row">Total cloud cover (pp)</th><td>1971–2000</td><td>2001–2025</td><td>2.18</td><td>3.27</td><td class="better">2.86</td><td>94%</td></tr>
+<tr><th scope="row">Air temperature at 2 m (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.41</td><td class="better">0.61</td><td>0.74</td><td>96%</td></tr>
+<tr><th scope="row">Surface skin temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.42</td><td class="better">0.60</td><td>0.69</td><td>96%</td></tr>
+<tr><th scope="row">Topsoil moisture (pp)</th><td>1971–2000</td><td>2001–2025</td><td>0.25</td><td>0.36</td><td class="better">0.33</td><td>93%</td></tr>
+<tr><th scope="row">Topsoil temperature (°C)</th><td>1971–2000</td><td>2001–2025</td><td>0.27</td><td class="better">0.49</td><td>0.72</td><td>96%</td></tr>
+<tr><th scope="row">Sea ice concentration (pp)</th><td>1982–2011</td><td>2012–2022</td><td>3.75</td><td>3.72</td><td class="better">3.69</td><td>95%</td></tr>
+<tr><th scope="row">Incoming sunlight at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.97</td><td>4.44</td><td class="better">3.77</td><td>93%</td></tr>
+<tr><th scope="row">Latent heat flux at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>3.09</td><td>4.60</td><td class="better">3.69</td><td>94%</td></tr>
+<tr><th scope="row">Sensible heat flux at the surface (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.50</td><td>4.18</td><td class="better">3.76</td><td>93%</td></tr>
+<tr><th scope="row">Outgoing longwave radiation (W/m²)</th><td>1971–2000</td><td>2001–2025</td><td>2.52</td><td>4.07</td><td class="better">3.36</td><td>95%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>What this shows:</p>
+      <ol class="plain">
+        <li><b>Temperature layers project usefully.</b> For surface, air, sea surface, skin and topsoil temperature, the projection clearly beats assuming no change. A typical miss 16 to 25 years out is about 0.5 °C for surface temperature.</li>
+        <li><b>Pressure, wind, cloud, moisture, sea ice and energy layers do not.</b> There the no-change guess did as well or better, because their 30-year trends are mostly noise. Treat projected years in those layers as illustrations of normal variability, not as a direction of travel.</li>
+        <li><b>The range is honest on average.</b> The textbook 95% interval contained only about 87% of measured values in this test, so the atlas widens it by a factor of 1.4. With that, 93% to 98% of measured values fell inside, depending on the layer.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>The calculation</h2>
+      <p>For a cell with values in the last 30 years, let <i>b</i> be the least squares slope, <i>m</i> the mean, and <i>s</i> the residual standard deviation (28 degrees of freedom). The slope’s <i>t</i> statistic is <i>b</i> divided by its standard error. The trend weight is <i>w</i> = 1 − 1/<i>t</i>² when |<i>t</i>| is above 1, and 0 otherwise. The central estimate <i>h</i> years after the window’s midpoint is <i>m</i> + <i>w</i>·<i>b</i>·<i>h</i>.</p>
+      <p>The 95% range is the central estimate ± 1.4 × 2.048 × <i>s</i> × √(1 + 1/30 + <i>h</i>²/Σ<i>x</i>²), the Student <i>t</i> prediction interval for one future value, widened by 1.4. The simulated year adds the residual of one window year, chosen by a fixed rule from the calendar year so every visitor sees the same map. Monthly and seasonal views repeat all of this for that month or season. Cells without 30 complete recent years stay gray. The 30-year trend view has no projected years.</p>
+    </section>
+    <section>
+      <h2>Limits</h2>
+      <p>One test period is thin evidence. The check above covers a single stretch of history per layer, and the reanalysis layers contain changes in observing systems that can look like trends. A straight line also cannot bend: if warming speeds up or slows down, the projection will miss it, and the range does not include that possibility. For decisions that matter, use published climate model projections such as those assessed by the IPCC.</p>
+      <p>The numbers in the table were calculated from the atlas’s own grids in November 2026 and will shift a little when the data are updated.</p>
+    </section>
+  </article>
+</main>
+</body>
+</html>

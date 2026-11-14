@@ -181,7 +181,7 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 [data-theme=dark] .cta:hover{background:#fff}
 .hero-alt{margin-top:12px;font-size:14px;color:var(--muted)}
 .hero-alt a{color:var(--ink);text-underline-offset:3px}
-.record{--ink:#edf0e8;--muted:#a9b9b0;--proj:#b7a6ff;margin:0;padding:18px 20px 14px;border:1px solid #1d3236;border-radius:14px;background:var(--deep);color:var(--ink)}
+.record{margin:0}
 .record-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px;font-size:14px;color:var(--muted)}
 .record-readout{font:600 clamp(20px,2.2vw,28px)/1 var(--display);letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
 .record-readout.is-projected{color:var(--proj)}
@@ -189,7 +189,9 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 #record-bars rect{transition:opacity .12s}
 #record-bars:hover rect{opacity:.55}
 #record-bars rect.hot{opacity:1}
-.bar-proj{fill:var(--proj);fill-opacity:.55}
+.bar-proj{fill:var(--proj);fill-opacity:.6}
+.bar-range{fill:var(--proj);fill-opacity:.9;pointer-events:none}
+#record-bars:hover rect.bar-range{opacity:.9}
 .record-axis{position:relative;height:18px;margin-top:6px;font:500 11px var(--mono);color:var(--muted)}
 .record-axis span{position:absolute;transform:translateX(-50%)}
 .record-axis span:first-child{transform:none;left:0!important}
@@ -197,10 +199,10 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .record-axis .is-projected{color:var(--proj)}
 .record-key{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:8px;font-size:13px;color:var(--muted)}
 .record-key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px}
-.key-obs{background:linear-gradient(90deg,#80b8ce,#e28b53)}
+.key-obs{background:linear-gradient(90deg,#6fa9c4,#dd8046)}
 .key-proj{background:var(--proj);opacity:.7}
 .record-source{margin-left:auto}
-.record-source a{color:var(--ink);text-underline-offset:3px}
+.record-source a,.record-key a{color:var(--ink);text-underline-offset:3px}
 
 /* ---------- How it works ---------- */
 .how{padding:clamp(40px,7vw,84px) 0 clamp(30px,5vw,56px)}
@@ -274,6 +276,10 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .lg{display:inline-block;width:14px;height:0;border-top:2px solid #2d7655}
 .lg-fit{border-color:#a7462c}
 .lg-proj{border-top:2px dashed var(--proj)}
+.lg-sim{border-top:1px solid var(--proj);opacity:.7}
+.numbers dd .pm{display:block;margin-top:4px;font:500 11px/1.3 var(--mono);color:var(--muted)}
+.timeline-note a{color:var(--accent);text-underline-offset:2px}
+.glossary a{text-underline-offset:2px}
 [data-theme=dark] .lg-obs{border-color:#a6d6b8}
 [data-theme=dark] .lg-fit{border-color:#f0a880}
 .chart-help{margin-top:-6px}
@@ -332,3 +338,12 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 }
 @keyframes grow{from{transform:scaleY(0)}to{transform:none}}
 @media(prefers-reduced-motion:reduce){.spot{animation:none;outline:3px solid #e0a23c;outline-offset:4px}}
+
+/* ---------- Projections page ---------- */
+.methods .source-table-wrap{margin-top:14px}
+.methods .source-table td,.methods .source-table th{font-variant-numeric:tabular-nums}
+.methods .source-table td.better{font-weight:650;color:var(--ink)}
+.methods ol.plain{margin:8px 0 0;padding-left:1.3em;max-width:72ch;font-size:15px;line-height:1.65;color:var(--muted)}
+.methods ol.plain li{margin-bottom:6px}
+.methods ol.plain b{color:var(--ink)}
+.methods-nav .utility+.utility{margin-left:auto}
