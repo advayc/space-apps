@@ -4,49 +4,113 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Explore how Earth’s climate has changed over time. Pick a variable, place, and year to see anomalies and trends.">
-<meta name="theme-color" content="#f4f3ed">
+<meta name="theme-color" content="#f2f0e9">
 <title>Earth Trend Atlas</title>
+<link rel="preload" href="assets/catalog.json" as="fetch" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <script src="theme.js"></script>
 <link rel="stylesheet" href="styles.css">
 <script defer src="assets/d3-array.min.js"></script>
 <script defer src="assets/d3-geo.min.js"></script>
 <script defer src="assets/topojson.min.js"></script>
 <script type="module" src="app.js"></script>
+<script type="module" src="landing.js"></script>
 </head>
 <body>
-<header class="landing" aria-label="Earth Trend Atlas">
+<header class="landing">
   <div class="landing-bar">
     <p class="brand">Earth Trend Atlas</p>
-    <div class="landing-actions">
-      <a class="utility" href="data-and-methods/">Data &amp; methods</a>
+    <nav class="landing-actions" aria-label="Site">
+      <a class="utility" href="#how">How it works</a>
+      <a class="utility" href="#sources">Data sources</a>
+      <a class="utility" href="data-and-methods/">Methods</a>
       <button class="utility" id="theme" type="button" aria-pressed="false"><span aria-hidden="true">◐</span> Dark mode</button>
-    </div>
+    </nav>
   </div>
   <section class="hero">
     <div class="hero-copy">
-      <p class="brand-mark">Earth Trend Atlas</p>
-      <h1>A planet in <em>change.</em></h1>
-      <p class="lede">See where Earth is warming, wetting, drying, or shifting — and whether those trends look statistically meaningful.</p>
-      <div class="hero-cta">
-        <a class="cta" href="#atlas">Explore the atlas</a>
-        <a class="cta-secondary" href="#how">How it works</a>
-      </div>
+      <h1>See how the climate has changed where you live.</h1>
+      <p class="lede">Pick any place on Earth and read its record: warmer or cooler, wetter or drier, and where the last 30 years are heading.</p>
+      <form class="hero-search" id="hero-search" role="search">
+        <label class="sr-only" for="hero-query">City or region</label>
+        <input id="hero-query" type="search" placeholder="Type a city, like Toronto" autocomplete="off" list="hero-places">
+        <datalist id="hero-places"></datalist>
+        <button class="cta" type="submit">Show this place</button>
+      </form>
+      <p class="hero-alt">or <a href="#atlas">open the world map</a></p>
     </div>
-    <figure class="hero-visual">
-      <img src="assets/hero-overview.png" width="1340" height="860" alt="Earth Trend Atlas flat map of surface temperature anomalies with a location panel for the Canadian Arctic.">
+    <figure class="record" id="record">
+      <figcaption class="record-head">
+        <span>Global average temperature, compared with 1951–1980</span>
+        <output id="record-readout" class="record-readout"></output>
+      </figcaption>
+      <svg id="record-bars" role="img" aria-label="Bar chart of global average temperature anomaly for each year from 1880 to 2025, rising from about minus 0.2 to plus 1.2 degrees Celsius, continued to 2050 as a projection." preserveAspectRatio="none"></svg>
+      <div class="record-axis" id="record-axis" aria-hidden="true"></div>
+      <p class="record-key">
+        <span><i class="key-obs"></i>Measured, one bar per year</span>
+        <span><i class="key-proj"></i>Projected: the last 30 years’ trend, continued</span>
+        <span class="record-source">Calculated from <a href="https://data.giss.nasa.gov/gistemp/data_v4.html" target="_blank" rel="noopener">NASA GISTEMP v4</a></span>
+      </p>
     </figure>
   </section>
 </header>
 <main>
-  <section class="how" id="how" aria-label="How to use">
-    <h2>How to use</h2>
-    <ol class="how-steps">
-      <li><strong>Choose a layer</strong><span>Temperature, rainfall, ice, wind, and more.</span></li>
-      <li><strong>Pick a place</strong><span>Search a city or click the map.</span></li>
-      <li><strong>Watch time move</strong><span>Scrub years or open the 30-year trend.</span></li>
-      <li><strong>Read the signal</strong><span>Anomaly, rate of change, and significance.</span></li>
+  <section class="how" id="how" aria-labelledby="how-title">
+    <h2 id="how-title">Four moves, about a minute</h2>
+    <ol class="steps">
+      <li class="step-card">
+        <div class="vignette" aria-hidden="true">
+          <div class="v-chips"><span class="on">Temperature</span><span>Rain and snow</span><span>Sea ice</span><span>Wind</span><span>Clouds</span><span>Soil</span></div>
+        </div>
+        <h3>Choose what to measure</h3>
+        <p>Eighteen layers, from temperature to sea ice.</p>
+        <button class="try" type="button" data-try="layer">Show me the menu</button>
+      </li>
+      <li class="step-card">
+        <div class="vignette" aria-hidden="true">
+          <svg viewBox="0 0 200 96" class="v-map">
+            <g id="v-cells"></g>
+            <circle cx="126" cy="42" r="9" class="v-pin-ring"/><circle cx="126" cy="42" r="3.2" class="v-pin"/>
+          </svg>
+        </div>
+        <h3>Pick a place</h3>
+        <p>Search a city, or click anywhere on the map.</p>
+        <button class="try" type="button" data-try="place-query">Show me the search</button>
+      </li>
+      <li class="step-card">
+        <div class="vignette" aria-hidden="true">
+          <div class="v-time">
+            <b>▶</b>
+            <div class="v-track"><i class="v-obs"></i><i class="v-proj"></i><u></u></div>
+            <div class="v-years"><span>1880</span><span>today</span><span>2050</span></div>
+          </div>
+        </div>
+        <h3>Move through time</h3>
+        <p>Drag the slider back to 1880, or forward into the violet projected years.</p>
+        <button class="try" type="button" data-try="year">Show me the timeline</button>
+      </li>
+      <li class="step-card">
+        <div class="vignette" aria-hidden="true">
+          <svg viewBox="0 0 200 96" class="v-chart">
+            <polyline class="v-line" points="6,70 18,74 30,62 42,68 54,58 66,63 78,50 90,56 102,44 114,48 126,36 138,40"/>
+            <line class="v-fit" x1="54" y1="62" x2="138" y2="36"/>
+            <line class="v-future" x1="138" y1="36" x2="194" y2="19"/>
+          </svg>
+          <span class="v-tag">+0.4 °C per decade</span>
+        </div>
+        <h3>Read the answer</h3>
+        <p>How far from normal, how fast it is changing, and whether the trend is solid.</p>
+        <button class="try" type="button" data-try="result">Show me the panel</button>
+      </li>
     </ol>
-    <p class="how-note">Colors show <strong>anomalies</strong> — difference from a place’s usual baseline, not absolute temperature. City names jump to the nearest ~2° grid cell. “Significant at 5%” is a local test, not proof of a cause.</p>
+    <dl class="glossary">
+      <div><dt><i class="sw sw-ramp"></i>Colors</dt><dd>Difference from that place’s usual value, never the raw reading. Cooler or drier on one side, warmer or wetter on the other.</dd></div>
+      <div><dt><i class="sw sw-fit"></i>Trend line</dt><dd>The straight line that best fits 30 years, given as change per decade.</dd></div>
+      <div><dt><i class="sw sw-sig"></i>Significant</dt><dd>A flat line would be unlikely for this spot. It does not prove a cause.</dd></div>
+      <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>That trend line continued to 2050. An estimate from past data, not a climate model forecast.</dd></div>
+    </dl>
   </section>
   <div class="workspace" id="atlas">
     <section class="explore" aria-label="Climate map">
@@ -64,7 +128,7 @@
       </div>
       <div class="map-panel">
         <div class="map-heading">
-          <div class="map-meta"><span id="mode-label">ANNUAL ANOMALY</span><strong id="map-year">2025</strong></div>
+          <div class="map-meta"><span id="mode-label">ANNUAL ANOMALY</span><strong id="map-year">2025</strong><em id="projected-badge" class="projected-badge" hidden>Projected from the last 30 years</em></div>
           <div class="map-selects">
             <label class="mode"><span class="sr-only">Map layer display</span><select id="mode">
               <option value="annual">Annual anomaly</option>
@@ -96,11 +160,15 @@
         <button class="play" id="play" aria-label="Play timeline">▶</button>
         <div class="timeline-track">
           <div class="time-head"><label for="year">TIMELINE</label><output id="year-label" for="year">2025</output></div>
-          <input type="range" id="year" min="1880" max="2025" value="2025" aria-label="Timeline year">
+          <div class="range-wrap">
+            <div class="time-zones" id="time-zones" aria-hidden="true"><i class="zone-obs"></i><i class="zone-proj" id="zone-proj"></i></div>
+            <input type="range" id="year" min="1880" max="2025" value="2025" aria-label="Timeline year">
+          </div>
           <div class="time-ticks" id="time-ticks"></div>
         </div>
         <div class="step"><button id="previous" aria-label="Previous year">‹</button><button id="next" aria-label="Next year">›</button></div>
       </div>
+      <p class="timeline-note" id="timeline-note"><i class="sw sw-proj" aria-hidden="true"></i><span id="timeline-note-text">Violet years are projections: the last 30 years’ trend, continued.</span> <button class="linkish" id="jump-latest" type="button">Back to latest data</button></p>
     </section>
     <aside class="inspector" aria-label="Location analysis">
       <div class="location">
@@ -126,6 +194,7 @@
         <div id="chart-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <output id="chart-readout" class="sr-only" aria-live="off"></output>
+      <p class="chart-legend" aria-hidden="true"><span><i class="lg lg-obs"></i>Measured</span><span><i class="lg lg-fit"></i>30-year trend line</span><span><i class="lg lg-proj"></i>Projection, with 95% range</span></p>
       <p id="chart-help" class="chart-help">Select two points to compare dates.</p>
       <span id="chart-announcement" class="sr-only" role="status"></span>
       <div id="chart-interval" class="chart-interval" hidden>
@@ -150,9 +219,32 @@
         </dl>
         <p id="inference"></p>
       </div>
-      <button id="csv" class="download">Download location CSV <span aria-hidden="true">↓</span></button>
+      <div class="downloads">
+        <h3>Download for your own analysis</h3>
+        <div class="download-grid">
+          <button id="csv" class="download" type="button"><b>Data, trend line and projection</b><span>CSV</span></button>
+          <button id="chart-png" class="download" type="button"><b>This chart</b><span>PNG</span></button>
+          <button id="trend-json" class="download" type="button"><b>Trend statistics</b><span>JSON</span></button>
+          <button id="map-png" class="download" type="button"><b>This map</b><span>PNG</span></button>
+        </div>
+        <p class="download-source">Original data: <a id="raw-source" target="_blank" rel="noopener"></a></p>
+      </div>
     </aside>
   </div>
+  <section class="sources" id="sources" aria-labelledby="sources-title">
+    <h2 id="sources-title">Where this data comes from</h2>
+    <p class="sources-lede">Every layer is built from a public dataset. Open the dataset’s page to read about it, or download the original file to work with it yourself.</p>
+    <div class="source-current" id="source-current" aria-live="polite"></div>
+    <details class="source-all">
+      <summary>All datasets in the atlas</summary>
+      <div class="source-table-wrap">
+        <table class="source-table">
+          <thead><tr><th scope="col">Layer</th><th scope="col">Database</th><th scope="col">Years</th><th scope="col">Get the data</th></tr></thead>
+          <tbody id="source-rows"></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
   <footer><span>Independent NASA Space Apps Challenge project</span><a class="utility" href="data-and-methods/">Data &amp; methods <span aria-hidden="true">→</span></a></footer>
 </main>
 </body>

@@ -1,5 +1,5 @@
-import { WINDOW, slopeAt, trend } from './statistics.js';
-import { months, seasons, dateLabel, makeTimeline, nearestIndex } from './timeline.js';
+import { WINDOW, slopeAt, trend, forecast, extendGrid } from './statistics.js';
+import { months, seasons, dateLabel, makeTimeline, nearestIndex, futureYears } from './timeline.js';
 
 const $ = id => document.getElementById(id);
 const earth = $('earth');
@@ -53,6 +53,9 @@ const datasets = new Map();
 let month = '01', season = 'djf', loadVersion = 0;
 let timeline = [], timelineIndex = 0, playing = false;
 let mapHover = null;
+let projectedNow = false;
+const PROJ = {light: '#6a4fd0', dark: '#b7a6ff'};
+const lastObservedIndex = () => timeline.findLastIndex(entry => !entry.projected);
 
 function periodKey() {
   if (mode === 'monthly') return month;
@@ -119,7 +122,11 @@ async function loadDataset(key, period) {
         for (let i = 0; i < expected; i++) values[i] = decoded.getFloat32(4 * i, true);
       }
     }
-    return { ...info, years: entry.years, values, size: info.width * info.height };
+    // Continue every cell's latest 30-year trend so the timeline can run past the record.
+    const size = info.width * info.height;
+    const future = futureYears(entry.years);
+    return { ...info, years: entry.years.concat(future), observed: entry.years.length,
+      values: extendGrid(values, size, entry.years.length, future.length), size };
   })().catch(error => {
     if (datasets.get(cacheKey) === request) datasets.delete(cacheKey);
     throw error;
@@ -135,7 +142,11 @@ function selectLayer(key) {
   layer = key;
   timeline = makeTimeline(catalog[layer], mode);
   renderTimelineTicks();
-  return selectDate(nearestIndex(timeline, mode, year, periodKey()));
+  const wasProjected = projectedNow;
+  let index = nearestIndex(timeline, mode, year, periodKey());
+  // A layer with a shorter record should open on its latest data, not a projection.
+  if (!wasProjected) while (index > 0 && timeline[index].projected) index--;
+  return selectDate(index);
 }
 
 async function selectDate(index) {
@@ -145,6 +156,7 @@ async function selectDate(index) {
   const version = ++loadVersion;
   timelineIndex = index;
   year = entry.year;
+  projectedNow = Boolean(entry.projected);
   if (mode === 'monthly') month = period;
   if (mode === 'seasonal') season = period;
   $('period').value = period;
@@ -169,8 +181,11 @@ async function selectDate(index) {
   $('layer-description').textContent = info.description;
   $('map-source').textContent = info.shortSource;
   $('map-source').href = info.source;
-  $('layer-baseline').textContent = timeline[0].year + '–' + timeline.at(-1).year + ' · Baseline ' + info.reference;
-  $('csv').disabled = true;
+  $('raw-source').textContent = info.shortSource;
+  $('raw-source').href = info.source;
+  renderSources();
+  $('layer-baseline').textContent = timeline[0].year + '–' + timeline[Math.max(0, lastObservedIndex())].year + ' · Baseline ' + info.reference;
+  for (const id of ['csv', 'chart-png', 'trend-json', 'map-png']) $(id).disabled = true;
   try {
     const data = await loadDataset(key, period);
     if (version !== loadVersion) return false;
@@ -215,10 +230,16 @@ function history(index) {
 function yearIndex() { return year - active.years[0]; }
 function renderTimelineTicks() {
   const last = timeline.length - 1;
-  $('time-ticks').replaceChildren(...[...new Set([0, Math.floor(last / 2), last])].map(index => {
+  const lastObserved = lastObservedIndex();
+  const hasFuture = lastObserved < last;
+  $('zone-proj').style.width = last ? (1 - lastObserved / last) * 100 + '%' : '0';
+  $('timeline-note').hidden = !hasFuture;
+  $('time-ticks').classList.toggle('with-future', hasFuture);
+  $('time-ticks').replaceChildren(...[...new Set(hasFuture ? [0, lastObserved, last] : [0, Math.floor(last / 2), last])].map(index => {
     const {year: tickYear, period} = timeline[index];
     const span = document.createElement('span');
     span.textContent = dateLabel(tickYear, period);
+    if (hasFuture) span.style.left = index / last * 100 + '%';
     return span;
   }));
 }
@@ -230,7 +251,11 @@ function updateTimeline() {
   Object.assign($('year'), {min: 0, max: last, value: timelineIndex});
   $('year').setAttribute('aria-label', 'Timeline ' + unit);
   $('year').setAttribute('aria-valuetext', mode === 'trend' ? (year - WINDOW + 1) + ' to ' + year : label);
-  $('year-label').value = label;
+  $('year-label').value = projectedNow ? label + ' · projected' : label;
+  $('year').closest('.timeline').classList.toggle('is-projected', projectedNow);
+  $('jump-latest').hidden = !projectedNow;
+  $('projected-badge').hidden = !projectedNow;
+  $('map').closest('.map-panel').classList.toggle('is-projected', projectedNow);
   $('previous').disabled = timelineIndex === 0;
   $('next').disabled = timelineIndex === last;
   $('play').disabled = !last;
@@ -246,7 +271,8 @@ function update(fade = 0) {
     ? Float32Array.from({length: active.size}, (_, i) => slopeAt(active.values, idx, active.size, i) * 10)
     : climate;
   $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : labelForYear(year);
-  $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND' : mode.toUpperCase() + ' ANOMALY';
+  $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND'
+    : (projectedNow ? 'PROJECTED ' : '') + mode.toUpperCase() + ' ANOMALY';
   $('chart-title').textContent = periodTitle() + ' anomalies';
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
@@ -423,19 +449,28 @@ function updateInspector() {
   const series = history(index);
   const idx = yearIndex();
   const current = series[idx];
-  const estimate = trend(series, idx);
+  // For projected years the trend shown is the one the projection continues.
+  const basis = Math.min(idx, active.observed - 1);
+  const estimate = trend(series, basis);
+  const basisYear = active.years[basis];
+  const steps = active.years.length - active.observed;
+  const future = steps ? forecast(series, active.observed - 1, steps) : null;
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
-  $('value-label').textContent = labelForYear(year) + ' anomaly';
+  $('value-label').textContent = labelForYear(year) + (projectedNow ? ' projected anomaly' : ' anomaly');
+  $('value').classList.toggle('is-projected', projectedNow);
   setMetric($('value'), current, active.unit);
   setMetric($('slope'), estimate?.rate, active.unit);
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + coords(center) +
-    ', from ' + active.years[0] + ' to ' + active.years.at(-1) + '. Use arrow keys to inspect, Enter to select endpoints, and Escape to clear.');
-  $('csv').disabled = !series.some(Number.isFinite);
+    ', measured from ' + active.years[0] + ' to ' + active.years[active.observed - 1] +
+    (steps ? ' and projected to ' + active.years.at(-1) : '') + '. Use arrow keys to inspect, Enter to select endpoints, and Escape to clear.');
+  const empty = !series.some(Number.isFinite);
+  for (const id of ['csv', 'chart-png', 'trend-json']) $(id).disabled = empty;
+  $('map-png').disabled = false;
   const hasTest = estimate?.p != null;
   $('trend-details').hidden = !hasTest;
-  $('trend-period').textContent = estimate ? (year - WINDOW + 1) + '–' + year : '';
+  $('trend-period').textContent = estimate ? (basisYear - WINDOW + 1) + '–' + basisYear : '';
   if (hasTest) {
     const low = mathNumber(estimate.low, 3);
     const high = mathNumber(estimate.high, 3);
@@ -446,11 +481,12 @@ function updateInspector() {
     $('p-value').replaceChildren(estimate.p < .001
       ? mathExpression(mathToken('mo', '<'), mathNumber(.001, 3, false))
       : mathExpression(mathNumber(estimate.p, Math.abs(estimate.p - .05) < .001 ? 4 : 3, false)));
-    $('inference').textContent = estimate.p < .05 ? 'Significant at 5%' : 'Not significant at 5%';
+    $('inference').textContent = (estimate.p < .05 ? 'Significant at 5%' : 'Not significant at 5%') +
+      (projectedNow ? '. The ' + year + ' value continues this trend and is an estimate, not a measurement.' : '');
   } else {
     $('inference').textContent = estimate ? 'Uncertainty estimate unavailable.' : 'Trend requires 30 consecutive years.';
   }
-  chartData = {series, idx, estimate};
+  chartData = {series, idx, estimate, basis, future};
   updateChartInterval();
   drawChart();
 }
@@ -487,85 +523,137 @@ function setMetric(element, value, unit) {
   element.replaceChildren(mathExpression(mathNumber(value, 2), mathToken('mtext', ' ' + unit)));
 }
 
+function chartColors(dark) {
+  return {
+    text: dark ? '#b1c1b4' : '#526258', grid: dark ? '#384a40' : '#dde1d5', zero: '#a0aa9f',
+    window: dark ? '#2d4135' : '#e1eadc', line: dark ? '#a6d6b8' : '#2d7655', dot: dark ? '#a6d6b8' : '#24523e',
+    fit: dark ? '#f0a880' : '#a7462c', proj: dark ? PROJ.dark : PROJ.light,
+    band: dark ? '#b7a6ff2e' : '#6a4fd024', zone: dark ? '#b7a6ff12' : '#6a4fd00d',
+    interval: dark ? '#eab37c' : '#934926', intervalFill: dark ? '#eab37c38' : '#ce8c5033',
+    cursor: dark ? '#e8eee4' : '#244e3d', marker: '#51675c',
+  };
+}
+
+// Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
+// strokes and type so the same routine serves the panel and the PNG export.
+function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
+  const {series, idx, estimate, basis, future} = chartData;
+  const c = chartColors(dark);
+  const observedCount = active.observed;
+  const finite = series.filter(Number.isFinite);
+  const left = ox + 37 * k, right = ox + w - 7 * k, top = oy + 8 * k, bottom = oy + h - 20 * k;
+  if (!finite.length) {
+    g.font = 12 * k + 'px sans-serif'; g.fillStyle = c.text;
+    g.fillText('No observations for this grid cell', ox + 5 * k, oy + h / 2);
+    return {left, right, bottom, top, x: () => left};
+  }
+  const extremes = future ? future.flatMap(f => [f.low, f.high]) : [];
+  const min = Math.min(0, ...finite, ...extremes), max = Math.max(0, ...finite, ...extremes);
+  const x = i => left + i / (series.length - 1) * (right - left);
+  const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
+  const lastX = x(observedCount - 1);
+  if (future) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
+  if (interactive && intervalAnchor !== null) {
+    const other = intervalEnd ?? chartCursor ?? intervalAnchor;
+    g.fillStyle = c.intervalFill;
+    g.fillRect(Math.min(x(intervalAnchor), x(other)), top, Math.abs(x(intervalAnchor) - x(other)), bottom - top);
+  } else if (estimate) {
+    g.fillStyle = c.window;
+    g.fillRect(x(basis - WINDOW + 1), top, x(basis) - x(basis - WINDOW + 1), bottom - top);
+  }
+  g.font = 9 * k + 'px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.textAlign = 'left';
+  for (const tick of [...new Set([min, 0, max])]) {
+    const ty = y(tick);
+    g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
+    g.strokeStyle = tick === 0 ? c.zero : c.grid; g.lineWidth = k; g.stroke();
+    g.fillText(signed(tick, 1), ox, clamp(ty + 3 * k, oy + 9 * k, bottom + 2 * k));
+  }
+  const axisY = oy + h - 3 * k;
+  g.fillText(active.years[0], left, axisY);
+  g.textAlign = 'right'; g.fillText(active.years.at(-1), right, axisY);
+  if (future) {
+    g.textAlign = lastX > right - 60 * k ? 'right' : 'center';
+    g.fillText(active.years[observedCount - 1], Math.min(lastX, right - 30 * k), axisY);
+  }
+  g.textAlign = 'left';
+  if (future) {
+    g.beginPath();
+    future.forEach((f, i) => g.lineTo(x(observedCount + i), y(f.high)));
+    for (let i = future.length - 1; i >= 0; i--) g.lineTo(x(observedCount + i), y(future[i].low));
+    g.closePath(); g.fillStyle = c.band; g.fill();
+  }
+  g.beginPath();
+  let connected = false;
+  for (let i = 0; i < observedCount; i++) {
+    const value = series[i];
+    if (!Number.isFinite(value)) { connected = false; continue; }
+    if (connected) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
+    connected = true;
+  }
+  g.strokeStyle = c.line; g.lineWidth = 1.35 * k; g.lineJoin = 'round'; g.stroke();
+  if (estimate) {
+    g.beginPath();
+    g.moveTo(x(basis - WINDOW + 1), y(estimate.mean - estimate.slope * (WINDOW - 1) / 2));
+    g.lineTo(x(basis), y(estimate.mean + estimate.slope * (WINDOW - 1) / 2));
+    g.strokeStyle = c.fit; g.lineWidth = 1.5 * k; g.stroke();
+  }
+  if (future) {
+    const anchor = trend(series, observedCount - 1);
+    g.beginPath();
+    g.moveTo(lastX, y(anchor.mean + anchor.slope * (WINDOW - 1) / 2));
+    future.forEach((f, i) => g.lineTo(x(observedCount + i), y(f.value)));
+    g.strokeStyle = c.proj; g.lineWidth = 1.6 * k; g.setLineDash([5 * k, 3 * k]); g.stroke(); g.setLineDash([]);
+  }
+  const marker = idx >= observedCount ? c.proj : c.marker;
+  g.beginPath(); g.moveTo(x(idx), top); g.lineTo(x(idx), bottom);
+  g.strokeStyle = marker; g.lineWidth = k; g.setLineDash([3 * k, 3 * k]); g.stroke(); g.setLineDash([]);
+  if (Number.isFinite(series[idx])) {
+    g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5 * k, 0, Math.PI * 2);
+    g.fillStyle = idx >= observedCount ? c.proj : c.dot; g.fill();
+  }
+  return {left, right, bottom, top, x, y, c};
+}
+
+function chartPointLabel(index) {
+  const {series} = chartData;
+  return labelForYear(active.years[index]) + ' · ' + (Number.isFinite(series[index])
+    ? signed(series[index]) + ' ' + active.unit + (index >= active.observed ? ' (projected)' : '') : 'No data');
+}
+
 function drawChart() {
   if (!active || !chartData) return;
-  const {series, idx, estimate} = chartData;
+  const {series, idx} = chartData;
   const g = chart.getContext('2d');
   const [w, h] = sizeCanvas(chart);
   g.clearRect(0, 0, w, h);
   const dark = document.documentElement.dataset.theme === 'dark';
-  const textColor = dark ? '#b1c1b4' : '#526258';
-  const observed = series.filter(Number.isFinite);
-  const left = 37, right = w - 7, top = 8, bottom = h - 20;
-  chartLayout = {left, right, bottom};
   const inspected = chartCursor ?? idx;
-  const label = labelForYear(active.years[inspected]) + ' · ' + (Number.isFinite(series[inspected])
-    ? signed(series[inspected]) + ' ' + active.unit : 'No data');
+  const label = chartPointLabel(inspected);
   $('chart-readout').textContent = label;
   const tooltip = $('chart-tooltip');
   tooltip.textContent = label;
-  tooltip.hidden = chartCursor == null || !observed.length;
-  if (!observed.length) {
-    g.font = '12px sans-serif'; g.fillStyle = textColor; g.fillText('No observations for this grid cell', 5, h / 2);
-    return;
-  }
-  const min = Math.min(0, ...observed), max = Math.max(0, ...observed);
-  const x = i => left + i / (series.length - 1) * (right - left);
-  const y = value => bottom - (max === min ? .5 : (value - min) / (max - min)) * (bottom - top);
-  const intervalColor = dark ? '#eab37c' : '#934926';
-  if (intervalAnchor !== null) {
-    const other = intervalEnd ?? chartCursor ?? intervalAnchor;
-    g.fillStyle = dark ? '#eab37c38' : '#ce8c5033';
-    g.fillRect(Math.min(x(intervalAnchor), x(other)), top, Math.abs(x(intervalAnchor) - x(other)), bottom - top);
-  } else if (estimate) {
-    g.fillStyle = dark ? '#2d4135' : '#e1eadc';
-    g.fillRect(x(idx - WINDOW + 1), top, x(idx) - x(idx - WINDOW + 1), bottom - top);
-  }
-  g.font = '9px monospace'; g.fillStyle = textColor;
-  for (const tick of [...new Set([min, 0, max])]) {
-    const ty = y(tick);
-    g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
-    g.strokeStyle = tick === 0 ? '#a0aa9f' : dark ? '#384a40' : '#dde1d5'; g.lineWidth = 1; g.stroke();
-    g.fillText(signed(tick, 1), 0, clamp(ty + 3, 9, bottom + 2));
-  }
-  g.fillText(active.years[0], left, h - 3);
-  g.textAlign = 'right'; g.fillText(active.years.at(-1), right, h - 3); g.textAlign = 'left';
-  g.beginPath();
-  let connected = false;
-  series.forEach((value, i) => {
-    if (!Number.isFinite(value)) { connected = false; return; }
-    if (connected) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
-    connected = true;
-  });
-  g.strokeStyle = dark ? '#a6d6b8' : '#2d7655'; g.lineWidth = 1.35; g.stroke();
-  if (estimate) {
-    g.beginPath();
-    g.moveTo(x(idx - WINDOW + 1), y(estimate.mean - estimate.slope * (WINDOW - 1) / 2));
-    g.lineTo(x(idx), y(estimate.mean + estimate.slope * (WINDOW - 1) / 2));
-    g.strokeStyle = dark ? '#f0a880' : '#a7462c'; g.lineWidth = 1.5; g.stroke();
-  }
-  g.beginPath(); g.moveTo(x(idx), top); g.lineTo(x(idx), bottom);
-  g.strokeStyle = '#51675c'; g.lineWidth = 1; g.setLineDash([3, 3]); g.stroke(); g.setLineDash([]);
-  if (Number.isFinite(series[idx])) {
-    g.beginPath(); g.arc(x(idx), y(series[idx]), 3.5, 0, Math.PI * 2); g.fillStyle = dark ? '#a6d6b8' : '#24523e'; g.fill();
-  }
+  const hasData = series.some(Number.isFinite);
+  tooltip.hidden = chartCursor == null || !hasData;
+  const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark});
+  chartLayout = {left, right, bottom};
+  if (!hasData) return;
   for (const endpoint of new Set([intervalAnchor, intervalEnd])) {
     if (endpoint === null) continue;
     const px = x(endpoint);
     g.beginPath(); g.moveTo(px, top); g.lineTo(px, bottom);
-    g.lineWidth = 1.5; g.strokeStyle = intervalColor; g.stroke();
+    g.lineWidth = 1.5; g.strokeStyle = c.interval; g.stroke();
     if (Number.isFinite(series[endpoint])) {
       g.beginPath(); g.arc(px, y(series[endpoint]), 4.5, 0, Math.PI * 2);
-      g.fillStyle = intervalColor; g.fill();
+      g.fillStyle = c.interval; g.fill();
     }
   }
   if (chartCursor != null) {
     const cursorX = x(inspected);
     g.beginPath(); g.moveTo(cursorX, top); g.lineTo(cursorX, bottom);
-    g.strokeStyle = textColor; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = c.text; g.lineWidth = 1; g.stroke();
     if (Number.isFinite(series[inspected])) {
       g.beginPath(); g.arc(cursorX, y(series[inspected]), 4.5, 0, Math.PI * 2);
-      g.fillStyle = dark ? '#e8eee4' : '#244e3d'; g.fill();
+      g.fillStyle = inspected >= active.observed ? c.proj : c.cursor; g.fill();
     }
     tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
       0, Math.max(0, w - tooltip.offsetWidth)) + 'px';
@@ -604,7 +692,8 @@ function updateChartInterval() {
   const startValue = chartData.series[start];
   const endValue = chartData.series[end];
   $('interval-summary').textContent = startYear + '–' + endYear + ' · ' +
-    (endYear - startYear) + (endYear - startYear === 1 ? ' year' : ' years');
+    (endYear - startYear) + (endYear - startYear === 1 ? ' year' : ' years') +
+    (end >= active.observed ? ' · includes projected values' : '');
   setMetric($('interval-start'), startValue, active.unit);
   setMetric($('interval-end'), endValue, active.unit);
   setMetric($('interval-change'), endValue - startValue, active.unit);
@@ -834,7 +923,7 @@ function updateMapReadout() {
   const {index, center} = cell(mapHover);
   const value = grid[index];
   output.textContent = coords(center) + ' · ' + (Number.isFinite(value)
-    ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : '')
+    ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : projectedNow ? ' (projected)' : '')
     : 'No data');
 }
 earth.addEventListener('pointerdown', event => {
@@ -1115,18 +1204,206 @@ $('recenter').addEventListener('click', recenter);
 $('map-zoom-in').addEventListener('click', () => zoomFlatMap(FLAT_ZOOM_STEP));
 $('map-zoom-out').addEventListener('click', () => zoomFlatMap(1 / FLAT_ZOOM_STEP));
 $('map-zoom-reset').addEventListener('click', resetFlatMap);
-$('csv').addEventListener('click', () => {
-  if (!active) return;
-  const {index, center} = cell(point);
-  const series = history(index);
-  const rows = ['year,anomaly,unit,latitude,longitude,baseline,product,period',
-    ...active.years.map((y, i) => [y, Number.isFinite(series[i]) ? series[i].toFixed(5) : '',
-      active.unit, center[1], center[0], active.reference, active.product, periodKey()].join(','))];
-  const url = URL.createObjectURL(new Blob([rows.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'}));
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url; link.download = layer + '-' + periodKey() + '-' + center[1] + '-' + center[0] + '.csv';
+  link.href = url; link.download = name;
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportName(kind, extension) {
+  const {center} = cell(point);
+  return [layer, periodKey(), center[1], center[0], kind].join('-') + '.' + extension;
+}
+
+// Everything a spreadsheet or notebook needs to redo the fit: the measured
+// series, the fitted line over its 30-year window, and the projection.
+function exportRows() {
+  const {center} = cell(point);
+  const {series, estimate, basis, future} = chartData;
+  const anchor = future ? trend(series, active.observed - 1) : null;
+  const fitted = (fit, end, i) => fit && i > end - WINDOW && i <= end
+    ? fit.mean + fit.slope * (i - (end - (WINDOW - 1) / 2)) : null;
+  return active.years.map((y, i) => {
+    const projected = i >= active.observed;
+    const f = projected ? future?.[i - active.observed] : null;
+    return {
+      year: y, period: periodKey(), kind: projected ? 'projected' : 'observed',
+      anomaly: !projected && Number.isFinite(series[i]) ? series[i] : null,
+      trend_line: fitted(estimate, basis, i),
+      projection: f ? f.value : fitted(anchor, active.observed - 1, i),
+      projection_low_95: f?.low ?? null, projection_high_95: f?.high ?? null,
+      unit: active.unit, latitude: center[1], longitude: center[0],
+    };
+  });
+}
+
+function trendSummary() {
+  const {center} = cell(point);
+  const {series, estimate, basis, future} = chartData;
+  const basisYear = active.years[basis];
+  const lastYear = active.years[active.observed - 1];
+  const round = value => value == null || !Number.isFinite(value) ? null : Number(value.toFixed(5));
+  return {
+    place: placeName, latitude: center[1], longitude: center[0], grid_degrees: active.step,
+    layer: active.name, period: periodKey(), unit: active.unit, baseline: active.reference,
+    database: {agency: active.agency, product: active.product, page: active.source, original_file: active.download},
+    record: {first_year: active.years[0], last_year: lastYear},
+    selected_year: {year, kind: projectedNow ? 'projected' : 'observed', anomaly: round(series[yearIndex()])},
+    trend: estimate && {
+      method: 'Ordinary least squares over 30 consecutive years; Newey-West standard error, 3 lags',
+      window: [basisYear - WINDOW + 1, basisYear],
+      slope_per_year: round(estimate.slope), slope_per_decade: round(estimate.rate),
+      // line(year) = value_at_mid_year + slope_per_year * (year - mid_year)
+      mid_year: basisYear - (WINDOW - 1) / 2, value_at_mid_year: round(estimate.mean),
+      ci95_per_decade: [round(estimate.low), round(estimate.high)], p_value: round(estimate.p),
+      significant_at_5_percent: estimate.p == null ? null : estimate.p < .05,
+    },
+    projection: future && {
+      method: 'Trend line of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued; 95% prediction interval, Student t with 28 degrees of freedom',
+      caution: 'Statistical extrapolation of past data. Not a climate model forecast.',
+      values: future.map((f, i) => ({year: active.years[active.observed + i],
+        value: round(f.value), low_95: round(f.low), high_95: round(f.high)})),
+    },
+    generated: new Date().toISOString(),
+  };
+}
+
+$('csv').addEventListener('click', () => {
+  if (!active || !chartData) return;
+  const rows = exportRows();
+  const columns = Object.keys(rows[0]);
+  const text = value => value == null ? '' : typeof value === 'number' && !Number.isInteger(value) ? value.toFixed(5) : String(value);
+  const quote = value => /[",\n]/.test(value) ? '"' + value.replaceAll('"', '""') + '"' : value;
+  const extra = {baseline: active.reference, product: active.product, source: active.source};
+  const lines = [[...columns, ...Object.keys(extra)].join(','),
+    ...rows.map(row => [...columns.map(key => text(row[key])), ...Object.values(extra)].map(quote).join(','))];
+  saveBlob(new Blob([lines.join('\n') + '\n'], {type: 'text/csv;charset=utf-8'}), exportName('series', 'csv'));
 });
+
+$('trend-json').addEventListener('click', () => {
+  if (!active || !chartData) return;
+  saveBlob(new Blob([JSON.stringify(trendSummary(), null, 2) + '\n'], {type: 'application/json'}), exportName('trend', 'json'));
+});
+
+function exportCanvas(width, height, dark) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const g = canvas.getContext('2d');
+  g.fillStyle = dark ? '#18241f' : '#ffffff';
+  g.fillRect(0, 0, width, height);
+  return [canvas, g];
+}
+
+$('chart-png').addEventListener('click', () => {
+  if (!active || !chartData) return;
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const W = 1600, H = 900, pad = 56, k = 2.2;
+  const [canvas, g] = exportCanvas(W, H, dark);
+  const {center} = cell(point);
+  const c = chartColors(dark);
+  const ink = dark ? '#e8eee4' : '#172721';
+  g.fillStyle = ink; g.font = '600 38px "Bricolage Grotesque", "IBM Plex Sans", sans-serif';
+  g.fillText(placeName + ': ' + active.name.toLowerCase(), pad, 78);
+  g.fillStyle = c.text; g.font = '22px "IBM Plex Sans", sans-serif';
+  g.fillText(periodTitle() + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
+    coords(center).replace(' · ', ', ') + '.', pad, 116);
+  const {estimate, basis, future} = chartData;
+  const legend = [[c.line, 'Measured', false]];
+  if (estimate) legend.push([c.fit, 'Trend line ' + (active.years[basis] - WINDOW + 1) + '–' + active.years[basis] +
+    ': ' + signed(estimate.rate) + ' ' + active.unit + ' per decade', false]);
+  if (future) legend.push([c.proj, 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
+  let lx = pad;
+  g.font = '20px "IBM Plex Sans", sans-serif';
+  for (const [color, label, dashed] of legend) {
+    g.beginPath(); g.moveTo(lx, 160); g.lineTo(lx + 38, 160);
+    g.strokeStyle = color; g.lineWidth = 4; g.setLineDash(dashed ? [10, 6] : []); g.stroke(); g.setLineDash([]);
+    g.fillStyle = ink; g.fillText(label, lx + 48, 167);
+    lx += 48 + g.measureText(label).width + 40;
+  }
+  paintChart(g, pad, 190, W - 2 * pad, H - 190 - 86, {dark, k, interactive: false});
+  g.fillStyle = c.text; g.font = '18px "IBM Plex Sans", sans-serif';
+  g.fillText('Data: ' + active.agency + ', ' + active.product + '. ' + active.source, pad, H - 34);
+  g.textAlign = 'right'; g.fillText('Earth Trend Atlas', W - pad, H - 34);
+  canvas.toBlob(blob => saveBlob(blob, exportName('chart', 'png')), 'image/png');
+});
+
+$('map-png').addEventListener('click', () => {
+  if (!active || !rendered) return;
+  const head = 96, foot = 54;
+  const [canvas, g] = exportCanvas(earth.width, earth.height + head + foot, true);
+  g.fillStyle = '#0b191d'; g.fillRect(0, 0, canvas.width, canvas.height);
+  g.drawImage(earth, 0, head);
+  g.fillStyle = '#edf0e8'; g.font = '600 30px "Bricolage Grotesque", "IBM Plex Sans", sans-serif';
+  g.fillText(active.name + ', ' + $('map-year').textContent + (projectedNow ? ' (projected)' : ''), 24, 44);
+  g.fillStyle = '#afbfb5'; g.font = '17px "IBM Plex Sans", sans-serif';
+  const scale = mode === 'trend' ? active.trendScale : active.scale;
+  g.fillText((mode === 'trend' ? 'Change per decade' : 'Anomaly relative to ' + active.reference) +
+    '. Color scale −' + scale + ' to +' + scale + ' ' + active.unit + '.', 24, 74);
+  g.fillText('Data: ' + active.agency + ', ' + active.product + '. Earth Trend Atlas.', 24, canvas.height - 20);
+  canvas.toBlob(blob => saveBlob(blob, [layer, mode, $('map-year').textContent.replace(/\s+/g, '-'), 'map'].join('-') + '.png'), 'image/png');
+});
+
+$('jump-latest').addEventListener('click', () => { stop(); selectDate(lastObservedIndex()); });
+
+function sourceLinks(info) {
+  const page = Object.assign(document.createElement('a'), {href: info.source, target: '_blank', rel: 'noopener', textContent: 'Dataset page'});
+  const file = Object.assign(document.createElement('a'), {href: info.download, target: '_blank', rel: 'noopener', textContent: 'Original file (NetCDF)'});
+  return [page, file];
+}
+
+function renderSources() {
+  if (!catalog) return;
+  const info = catalog[layer];
+  const element = (tag, className, text) => Object.assign(document.createElement(tag), {className, textContent: text ?? ''});
+  const current = $('source-current');
+  const facts = element('dl', 'source-facts');
+  for (const [term, value] of [['Provider', info.agency], ['Years', info.years[0] + '–' + info.years.at(-1)],
+    ['Compared with', info.reference + ' average'], ['Map grid', info.step + '° cells']]) {
+    const row = document.createElement('div');
+    row.append(element('dt', '', term), element('dd', '', value));
+    facts.append(row);
+  }
+  const links = element('p', 'source-links');
+  links.append(...sourceLinks(info));
+  current.replaceChildren(element('p', 'source-kicker', 'On the map now: ' + info.name), element('h3', '', info.product), facts, links);
+  if (!$('source-rows').childElementCount) {
+    $('source-rows').replaceChildren(...Object.entries(catalog).map(([key, data]) => {
+      const row = document.createElement('tr');
+      row.dataset.layer = key;
+      const name = element('th', '');
+      name.scope = 'row';
+      const pick = element('button', 'linkish', data.name);
+      pick.type = 'button';
+      pick.addEventListener('click', () => {
+        $('layer').value = key;
+        selectLayer(key);
+        $('atlas').scrollIntoView({block: 'start'});
+      });
+      name.append(pick);
+      const links = element('td', 'source-links');
+      links.append(...sourceLinks(data));
+      row.append(name, element('td', '', data.agency + ', ' + data.product),
+        element('td', '', data.years[0] + '–' + data.years.at(-1)), links);
+      return row;
+    }));
+  }
+  for (const row of $('source-rows').children) row.classList.toggle('current', row.dataset.layer === layer);
+}
+
+// Landing page hooks: the hero search and the "show me" buttons in the steps.
+document.addEventListener('atlas-find-place', event => {
+  const query = event.detail;
+  const match = active ? searchPlaces(query)[0] : null;
+  $('atlas').scrollIntoView({block: 'start'});
+  if (match && query.trim()) {
+    goToPlace(match);
+  } else {
+    $('place-query').value = query;
+    $('place-query').focus({preventScroll: true});
+  }
+});
+
 for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => changeView(button.dataset.view));
 $('layer').addEventListener('change', event => selectLayer(event.target.value));
 
@@ -1150,9 +1427,15 @@ new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
 
 try {
-  [catalog, land, borders, cities] = await Promise.all(
-    ['catalog.json', 'land.json', 'countries.json', 'cities.json'].map(async file => (await fetchAsset(file)).json())
-  );
+  // Start the default layer's download the moment the catalog arrives,
+  // without waiting for coastlines, borders, or the city list.
+  const catalogReady = fetchAsset('catalog.json').then(response => response.json()).then(loaded => {
+    catalog = loaded;
+    loadDataset(layer, 'annual').catch(() => {});
+    return loaded;
+  });
+  [catalog, land, borders, cities] = await Promise.all([catalogReady,
+    ...['land.json', 'countries.json', 'cities.json'].map(async file => (await fetchAsset(file)).json())]);
   d3 = window.d3;
   globe = d3.geoOrthographic().clipAngle(90);
   flatMap = d3.geoEquirectangular();

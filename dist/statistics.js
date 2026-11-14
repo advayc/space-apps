@@ -46,3 +46,48 @@ function normalTwoSided(z) {
   const tail = t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
   return Math.min(1, 2 * Math.exp(-z * z / 2) * tail / Math.sqrt(2 * Math.PI));
 }
+
+// Straight-line projection: continue the least squares fit of the WINDOW values
+// ending at `end`. Returns one {value, low, high} per future step, where
+// low/high bound a 95% prediction interval for a single future value
+// (Student t, WINDOW - 2 degrees of freedom), or null if the window has gaps.
+const T_975 = 2.048407; // t quantile for 28 degrees of freedom
+export function forecast(values, end, steps) {
+  const slope = slopeAt(values, end);
+  if (!Number.isFinite(slope)) return null;
+  let mean = 0;
+  for (let i = 0; i < WINDOW; i++) mean += values[end - WINDOW + 1 + i];
+  mean /= WINDOW;
+  let residual = 0;
+  for (let i = 0; i < WINDOW; i++) {
+    const r = values[end - WINDOW + 1 + i] - mean - (i - center) * slope;
+    residual += r * r;
+  }
+  const sigma = Math.sqrt(residual / (WINDOW - 2));
+  return Array.from({length: steps}, (_, k) => {
+    const x = center + k + 1;
+    const value = mean + slope * x;
+    const half = T_975 * sigma * Math.sqrt(1 + 1 / WINDOW + x * x / spread);
+    return {value, low: value - half, high: value + half};
+  });
+}
+
+// Append projected grids for every cell to a year-major value array.
+export function extendGrid(values, size, count, steps) {
+  if (steps <= 0 || count < WINDOW) return values;
+  const out = new Float32Array((count + steps) * size);
+  out.set(values);
+  const end = count - 1;
+  for (let cell = 0; cell < size; cell++) {
+    const slope = slopeAt(values, end, size, cell);
+    let mean = 0;
+    if (Number.isFinite(slope)) {
+      for (let i = 0; i < WINDOW; i++) mean += values[(end - WINDOW + 1 + i) * size + cell];
+      mean /= WINDOW;
+    }
+    for (let k = 0; k < steps; k++) {
+      out[(count + k) * size + cell] = Number.isFinite(slope) ? mean + slope * (center + k + 1) : NaN;
+    }
+  }
+  return out;
+}
