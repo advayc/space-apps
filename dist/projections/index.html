@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false})"></script>
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script>
 <script src="../theme.js?v=2"></script>
 <link rel="stylesheet" href="../styles.css">
 </head>
@@ -33,12 +33,12 @@
 
     <section>
       <h2>Trend fit</h2>
-      <p>Write the window values as $y_i$ for $i = 0,\ldots,29$, centered time $x_i = i - \bar{x}$ with $\bar{x} = 14.5$, and window mean $\bar{y}$. The ordinary least-squares slope is</p>
+      <p>Write the window values as \(y_i\) for \(i = 0,\ldots,29\), centered time \(x_i = i - \bar{x}\) with \(\bar{x} = 14.5\), and window mean \(\bar{y}\). The ordinary least-squares slope is</p>
       $$
       b = \frac{\sum_{i=0}^{29} x_i\,(y_i - \bar{y})}{\sum_{i=0}^{29} x_i^2},\qquad
       \sum_{i=0}^{29} x_i^2 = \frac{30(30^2-1)}{12} = 2247.5.
       $$
-      <p>Residual standard deviation (28 degrees of freedom) and the slope’s $t$ statistic are</p>
+      <p>Residual standard deviation (28 degrees of freedom) and the slope’s \(t\) statistic are</p>
       $$
       s = \sqrt{\frac{1}{28}\sum_{i=0}^{29}\bigl(y_i - \bar{y} - b x_i\bigr)^2},\qquad
       t = \frac{b}{s\big/\sqrt{\sum x_i^2}}.
@@ -54,36 +54,36 @@
       0 & \text{otherwise.}
       \end{cases}
       $$
-      <p>A step $h$ years after the window midpoint ($h = 14.5 + k + 1$ for the $k$-th future year, $k = 0,1,\ldots$) has central estimate</p>
+      <p>A step \(h\) years after the window midpoint (\(h = 14.5 + k + 1\) for the \(k\)-th future year, \(k = 0,1,\ldots\)) has central estimate</p>
       $$
       \hat{y}(h) = \bar{y} + w\,b\,h.
       $$
-      <p>If $|t|\le 1$, the projection collapses to the recent mean. Temperature layers usually keep $w$ near 1; noisy fields often shrink toward 0.</p>
+      <p>If \(|t|\le 1\), the projection collapses to the recent mean. Temperature layers usually keep \(w\) near 1; noisy fields often shrink toward 0.</p>
     </section>
 
     <section>
       <h2>95% range</h2>
-      <p>The location chart shows a classical Student-$t$ prediction interval for one future observation, widened by a fixed factor $c = 1.4$ after a hindcast found the textbook band too narrow:</p>
+      <p>The location chart shows a classical Student-\(t\) prediction interval for one future observation, widened by a fixed factor \(c = 1.4\) after a hindcast found the textbook band too narrow:</p>
       $$
       \hat{y}(h) \;\pm\; c\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
       \qquad t_{0.975,\,28} \approx 2.048.
       $$
-      <p>The band grows with lead time $h$. It still omits structural breaks, changing slopes, and dataset inhomogeneity, so treat it as a lower bound on real uncertainty.</p>
+      <p>The band grows with lead time \(h\). It still omits structural breaks, changing slopes, and dataset inhomogeneity, so treat it as a lower bound on real uncertainty.</p>
     </section>
 
     <section>
       <h2>One possible year on the map</h2>
-      <p>Real years do not sit on a line. For calendar year $Y$, the map adds the residual of one past window year</p>
+      <p>Real years do not sit on a line. For calendar year \(Y\), the map adds the residual of one past window year</p>
       $$
       j = \bigl(Y\cdot 2654435761\bigr) \bmod 30,\qquad
       \tilde{y}(h) = \hat{y}(h) + \bigl(y_j - \bar{y} - b x_j\bigr).
       $$
-      <p>The same $j$ is used for every cell in that year, so spatial warm/cool patterns stay coherent. That map field is one plausible year under the fitted noise, not a forecast of that exact year. The side panel’s central value and range use $\hat{y}(h)$, not $\tilde{y}(h)$.</p>
+      <p>The same \(j\) is used for every cell in that year, so spatial warm/cool patterns stay coherent. That map field is one plausible year under the fitted noise, not a forecast of that exact year. The side panel’s central value and range use \(\hat{y}(h)\), not \(\tilde{y}(h)\).</p>
     </section>
 
     <section>
       <h2>Hindcast check</h2>
-      <p>To measure error, each layer was fit on 30 years ending 25 years before the latest observed year, then projected forward and compared with measurements. “Typical miss” is the median absolute gap between $\hat{y}$ and the measured value across cells. The no-change column is the miss from holding each cell at its 30-year mean. Bold marks the better method.</p>
+      <p>To measure error, each layer was fit on 30 years ending 25 years before the latest observed year, then projected forward and compared with measurements. “Typical miss” is the median absolute gap between \(\hat{y}\) and the measured value across cells. The no-change column is the miss from holding each cell at its 30-year mean. Bold marks the better method.</p>
       <div class="source-table-wrap">
         <table class="source-table">
           <thead><tr><th scope="col">Layer</th><th scope="col">Fitted to</th><th scope="col">Checked against</th><th scope="col">Typical miss, first 10 years</th><th scope="col">Typical miss, last 10 years</th><th scope="col">No-change guess, last 10 years</th><th scope="col">Measured values inside the 95% range</th></tr></thead>
@@ -109,12 +109,12 @@
           </tbody>
         </table>
       </div>
-      <p>Temperature layers beat a no-change guess (roughly $0.5\,^\circ\mathrm{C}$ typical miss 16–25 years out for surface temperature). Pressure, wind, cloud, moisture, sea ice, and energy layers usually do not—treat their violet years as variability sketches, not a direction of travel. Before widening, the textbook 95% interval held only about 87% of measured values; with $c = 1.4$ it held 93–98% by layer.</p>
+      <p>Temperature layers beat a no-change guess (roughly \(0.5^{\circ}\mathrm{C}\) typical miss 16–25 years out for surface temperature). Pressure, wind, cloud, moisture, sea ice, and energy layers usually do not—treat their violet years as variability sketches, not a direction of travel. Before widening, the textbook 95% interval held only about 87% of measured values; with \(c = 1.4\) it held 93–98% by layer.</p>
     </section>
 
     <section>
       <h2>Limits</h2>
-      <p>One hindcast window is thin evidence, and reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows, $\hat{y}$ will miss, and the interval does not include that possibility. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
+      <p>One hindcast window is thin evidence, and reanalysis layers can contain observing-system changes that look like trends. A straight line cannot bend: if warming accelerates or slows, \(\hat{y}\) will miss, and the interval does not include that possibility. For decisions that matter, use published climate-model projections such as those assessed by the IPCC. Table numbers were computed from the atlas grids in November 2026 and will shift slightly when the data update.</p>
     </section>
   </article>
 </main>

@@ -61,7 +61,7 @@
   <section class="how" id="how" aria-label="How to read the map">
     <dl class="glossary">
       <div><dt><i class="sw sw-ramp"></i>Colors</dt><dd>Difference from that place’s usual value, never the raw reading. Cooler or drier on one side, warmer or wetter on the other.</dd></div>
-      <div><dt><i class="sw sw-fit"></i>Trend line</dt><dd>The straight line that best fits 30 years, given as change per decade.</dd></div>
+      <div><dt><i class="sw sw-fit"></i>Trend line</dt><dd>The straight line through the years you select. With none selected, it fits the measured record.</dd></div>
       <div><dt><i class="sw sw-sig"></i>Significant</dt><dd>A flat line would be unlikely for this spot. It does not prove a cause.</dd></div>
       <div><dt><i class="sw sw-proj"></i>Projected</dt><dd>The recent trend carried to 2050, with a range showing how far off it could be. Not a climate model forecast. <a href="projections/">How projections work</a>.</dd></div>
     </dl>
@@ -148,8 +148,8 @@
         <div id="chart-tooltip" class="chart-tooltip" hidden></div>
       </div>
       <output id="chart-readout" class="sr-only" aria-live="off"></output>
-      <p class="chart-legend" aria-hidden="true"><span><i class="lg lg-obs"></i>Measured</span><span><i class="lg lg-fit"></i>30-year trend line</span><span><i class="lg lg-proj"></i>Projection, with 95% range</span><span><i class="lg lg-sim"></i>One possible path</span></p>
-      <p id="chart-help" class="chart-help">Select two points to compare dates.</p>
+      <p class="chart-legend" aria-hidden="true"><span><i class="lg lg-obs"></i>Measured</span><span><i class="lg lg-fit"></i>Trend line</span><span><i class="lg lg-proj"></i>Projection, with 95% range</span><span><i class="lg lg-sim"></i>One possible path</span></p>
+      <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
       <span id="chart-announcement" class="sr-only" role="status"></span>
       <div id="chart-interval" class="chart-interval" hidden>
         <div class="interval-header">

@@ -542,6 +542,38 @@ function chartColors(dark) {
   };
 }
 
+// Ordinary least squares over indexes [start, end], skipping gaps.
+function lineFit(values, start, end) {
+  let n = 0, sumX = 0, sumY = 0, sumXX = 0, sumXY = 0;
+  const lo = Math.max(0, start), hi = Math.min(values.length - 1, end);
+  for (let i = lo; i <= hi; i++) {
+    const value = values[i];
+    if (!Number.isFinite(value)) continue;
+    n++;
+    sumX += i; sumY += value; sumXX += i * i; sumXY += i * value;
+  }
+  if (n < 2) return null;
+  const denom = n * sumXX - sumX * sumX;
+  if (!(Math.abs(denom) > 1e-9)) return null;
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  return {start: lo, end: hi, at: i => intercept + slope * i};
+}
+
+// Selected chart interval when both ends are set; otherwise the measured record.
+function chartFit(values) {
+  if (intervalAnchor !== null && intervalEnd !== null) {
+    return lineFit(values, Math.min(intervalAnchor, intervalEnd), Math.max(intervalAnchor, intervalEnd));
+  }
+  let first = -1, last = -1;
+  for (let i = 0; i < active.observed; i++) {
+    if (!Number.isFinite(values[i])) continue;
+    if (first < 0) first = i;
+    last = i;
+  }
+  return first < 0 ? null : lineFit(values, first, last);
+}
+
 // Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
 // strokes and type so the same routine serves the panel and the PNG export.
 function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
@@ -599,10 +631,11 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     connected = true;
   }
   g.strokeStyle = c.line; g.lineWidth = 1.35 * k; g.lineJoin = 'round'; g.stroke();
-  if (estimate) {
+  const fit = chartFit(central);
+  if (fit) {
     g.beginPath();
-    g.moveTo(x(basis - WINDOW + 1), y(estimate.mean - estimate.slope * (WINDOW - 1) / 2));
-    g.lineTo(x(basis), y(estimate.mean + estimate.slope * (WINDOW - 1) / 2));
+    g.moveTo(x(fit.start), y(fit.at(fit.start)));
+    g.lineTo(x(fit.end), y(fit.at(fit.end)));
     g.strokeStyle = c.fit; g.lineWidth = 1.5 * k; g.stroke();
   }
   if (future) {
@@ -1340,10 +1373,10 @@ $('chart-png').addEventListener('click', () => {
   g.fillStyle = c.text; g.font = '22px "IBM Plex Sans", sans-serif';
   g.fillText(periodTitle() + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
     coords(center).replace(' · ', ', ') + '.', pad, 116);
-  const {estimate, basis, future} = chartData;
+  const {future, central} = chartData;
+  const fit = chartFit(central);
   const legend = [[c.line, 'Measured', false]];
-  if (estimate) legend.push([c.fit, 'Trend line ' + (active.years[basis] - WINDOW + 1) + '–' + active.years[basis] +
-    ': ' + signed(estimate.rate) + ' ' + active.unit + ' per decade', false]);
+  if (fit) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
   if (future) legend.push([c.proj, 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
   let lx = pad;
   g.font = '20px "IBM Plex Sans", sans-serif';
