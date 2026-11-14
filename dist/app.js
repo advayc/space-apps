@@ -37,14 +37,17 @@ function rgb(hex) {
   return hex.slice(1).match(/../g).map(channel => parseInt(channel, 16));
 }
 
+const MAX_FLAT_ZOOM = 16;
+const MAX_GLOBE_ZOOM = 2.6;
+const GLOBE_ZOOM_STEP = 1.35;
+const FLAT_ZOOM_STEP = 1.5;
+const DEFAULT_ROTATION = [93, -46];
 let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'map', mode = 'annual', year = 2025;
-let rotation = [93, -46], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
+let rotation = [...DEFAULT_ROTATION], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let flatMap, flatZoom = 1, flatOffset = [0, 0];
-const MAX_FLAT_ZOOM = 16;
-const FLAT_ZOOM_STEP = 1.5;
 let chartData, chartCursor, chartLayout;
 let intervalAnchor = null, intervalEnd = null;
 let placeMatches = [], placeActive = -1;
@@ -126,7 +129,7 @@ async function loadDataset(key, period) {
     const size = info.width * info.height;
     const future = futureYears(entry.years);
     return { ...info, years: entry.years.concat(future), observed: entry.years.length,
-      values: extendGrid(values, size, entry.years.length, future.length, future[0]), size };
+      values: extendGrid(values, info.width, entry.years.length, future.length, future[0]), size };
   })().catch(error => {
     if (datasets.get(cacheKey) === request) datasets.delete(cacheKey);
     throw error;
@@ -453,7 +456,14 @@ function updateInspector() {
   const estimate = trend(series, basis);
   const basisYear = active.years[basis];
   const steps = active.years.length - active.observed;
-  const future = steps ? forecast(series, active.observed - 1, steps, active.years[active.observed]) : null;
+  let future = steps ? forecast(series, active.observed - 1, steps, active.years[active.observed]) : null;
+  // A gap with no series of its own takes the value already filled into the map.
+  if (!future && steps) {
+    const tail = series.slice(active.observed);
+    if (tail.length && tail.every(Number.isFinite)) {
+      future = tail.map(value => ({value, low: value, high: value, filled: true}));
+    }
+  }
   // Measured values, then the central projection (the map shows the simulated year instead).
   const central = future ? series.map((value, i) => i < active.observed ? value : future[i - active.observed].value) : series;
   const range = projectedNow && future ? future[idx - active.observed] : null;
@@ -463,7 +473,7 @@ function updateInspector() {
   $('value-label').textContent = labelForYear(year) + (projectedNow ? ' projected anomaly' : ' anomaly');
   $('value').classList.toggle('is-projected', projectedNow);
   setMetric($('value'), central[idx], active.unit);
-  if (range) {
+  if (range && !range.filled && range.high - range.low > 1e-9) {
     const error = document.createElement('small');
     error.className = 'pm';
     error.textContent = '± ' + ((range.high - range.low) / 2).toFixed(2) + ' (95% range)';
@@ -641,8 +651,17 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   if (future) {
     // One simulated path with year-to-year swings, then the central estimate.
     g.beginPath();
-    g.moveTo(lastX, y(series[observedCount - 1]));
-    for (let i = observedCount; i < series.length; i++) g.lineTo(x(i), y(series[i]));
+    let started = false;
+    if (Number.isFinite(series[observedCount - 1])) {
+      g.moveTo(lastX, y(series[observedCount - 1]));
+      started = true;
+    }
+    for (let i = observedCount; i < series.length; i++) {
+      const value = series[i];
+      if (!Number.isFinite(value)) { started = false; continue; }
+      if (started) g.lineTo(x(i), y(value)); else g.moveTo(x(i), y(value));
+      started = true;
+    }
     g.globalAlpha = .55; g.strokeStyle = c.proj; g.lineWidth = k; g.stroke(); g.globalAlpha = 1;
     g.beginPath();
     future.forEach((f, i) => g.lineTo(x(observedCount + i), y(f.value)));
@@ -844,6 +863,7 @@ function animateCamera(longitude, latitude, targetZoom, duration) {
   if (reducedMotion.matches || view !== 'globe' || !active) {
     zoom = targetZoom;
     rotate(longitude, latitude);
+    updateViewTools();
     return;
   }
 
@@ -859,6 +879,7 @@ function animateCamera(longitude, latitude, targetZoom, duration) {
     cameraFrame = progress < 1 ? requestAnimationFrame(step) : null;
     if (!cameraFrame) zoomTarget = null;
     rotate(startLon + deltaLon * eased, startLat + (latitude - startLat) * eased);
+    if (!cameraFrame) updateViewTools();
   }
   cameraFrame = requestAnimationFrame(step);
 }
@@ -897,12 +918,22 @@ function constrainFlatOffset() {
   return [mapWidth, mapHeight];
 }
 
+function updateViewTools() {
+  const globeView = view === 'globe';
+  const level = globeView ? (zoomTarget ?? zoom) : flatZoom;
+  const max = globeView ? MAX_GLOBE_ZOOM : MAX_FLAT_ZOOM;
+  $('map-zoom-out').disabled = level <= 1 + 1e-6;
+  $('map-zoom-in').disabled = level >= max - 1e-6;
+  $('map-zoom-reset').disabled = globeView
+    ? Math.abs(zoom - 1) < 1e-6 && Math.abs(wrap(rotation[0] - DEFAULT_ROTATION[0])) < 0.5 && Math.abs(rotation[1] - DEFAULT_ROTATION[1]) < 0.5
+    : flatZoom === 1 && flatOffset[0] === 0 && flatOffset[1] === 0;
+  $('flat-tools').setAttribute('aria-label', globeView ? 'Globe view' : 'Flat map zoom');
+}
+
 function updateFlatMap() {
   constrainFlatOffset();
   earth.classList.toggle('grab', flatZoom > 1);
-  $('map-zoom-out').disabled = flatZoom === 1;
-  $('map-zoom-in').disabled = flatZoom === MAX_FLAT_ZOOM;
-  $('map-zoom-reset').disabled = flatZoom === 1;
+  updateViewTools();
   mapHover = null;
   updateMapReadout();
   finishMapFade();
@@ -925,6 +956,20 @@ function resetFlatMap() {
   flatZoom = 1;
   flatOffset = [0, 0];
   updateFlatMap();
+}
+
+function zoomGlobe(factor) {
+  if (view !== 'globe') return;
+  const current = zoomTarget ?? zoom;
+  const target = clamp(current * factor, 1, MAX_GLOBE_ZOOM);
+  if (Math.abs(target - current) < 1e-4) return;
+  animateCamera(rotation[0], rotation[1], target, 180);
+  updateViewTools();
+}
+
+function resetGlobe() {
+  animateCamera(DEFAULT_ROTATION[0], DEFAULT_ROTATION[1], 1, 420);
+  updateViewTools();
 }
 
 function recenter() {
@@ -1037,8 +1082,9 @@ earth.addEventListener('wheel', event => {
     zoomFlatMap(Math.exp(-event.deltaY * unit * .002), event.clientX - rect.left, event.clientY - rect.top);
     return;
   }
-  const target = clamp((zoomTarget ?? zoom) * Math.exp(-event.deltaY * unit * .001), 1, 2.6);
+  const target = clamp((zoomTarget ?? zoom) * Math.exp(-event.deltaY * unit * .001), 1, MAX_GLOBE_ZOOM);
   animateCamera(...rotation, target, 130);
+  updateViewTools();
 }, {passive: false});
 function selectMapCell(location) {
   clearChartInterval();
@@ -1078,6 +1124,21 @@ earth.addEventListener('keydown', event => {
     }
     return;
   }
+  if (event.key === '+' || event.key === '=') {
+    event.preventDefault();
+    zoomGlobe(GLOBE_ZOOM_STEP);
+    return;
+  }
+  if (event.key === '-') {
+    event.preventDefault();
+    zoomGlobe(1 / GLOBE_ZOOM_STEP);
+    return;
+  }
+  if (event.key === 'Home') {
+    event.preventDefault();
+    resetGlobe();
+    return;
+  }
   const directions = {ArrowLeft: [-8,0], ArrowRight: [8,0], ArrowUp: [0,8], ArrowDown: [0,-8]};
   const direction = directions[event.key];
   if (direction) {
@@ -1097,7 +1158,7 @@ function changeView(next) {
   earth.setAttribute('aria-label', view === 'globe'
     ? 'Climate globe. Use arrow keys to rotate and Enter to select the center cell. Click a cell to select it.'
     : 'Flat climate map. Use plus and minus to zoom, drag or use arrows to pan, and press Enter to inspect the center cell.');
-  $('flat-tools').hidden = view !== 'map';
+  updateViewTools();
   if (view === 'map' && width && height) updateFlatMap();
   $('map').dataset.view = view;
   rasterMap = null;
@@ -1247,9 +1308,9 @@ $('play').addEventListener('click', play);
 $('previous').addEventListener('click', () => { stop(); selectDate(timelineIndex - 1); });
 $('next').addEventListener('click', () => { stop(); selectDate(timelineIndex + 1); });
 $('recenter').addEventListener('click', recenter);
-$('map-zoom-in').addEventListener('click', () => zoomFlatMap(FLAT_ZOOM_STEP));
-$('map-zoom-out').addEventListener('click', () => zoomFlatMap(1 / FLAT_ZOOM_STEP));
-$('map-zoom-reset').addEventListener('click', resetFlatMap);
+$('map-zoom-in').addEventListener('click', () => view === 'map' ? zoomFlatMap(FLAT_ZOOM_STEP) : zoomGlobe(GLOBE_ZOOM_STEP));
+$('map-zoom-out').addEventListener('click', () => view === 'map' ? zoomFlatMap(1 / FLAT_ZOOM_STEP) : zoomGlobe(1 / GLOBE_ZOOM_STEP));
+$('map-zoom-reset').addEventListener('click', () => view === 'map' ? resetFlatMap() : resetGlobe());
 function saveBlob(blob, name) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -1306,8 +1367,12 @@ function trendSummary() {
       significant_at_5_percent: estimate.p == null ? null : estimate.p < .05,
     },
     projection: future && {
-      method: 'Trend of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued, damped by 1 - 1/t^2 when weak; ' +
-        '95% range is the Student t prediction interval (28 degrees of freedom) widened by min(2, 1.25 + 0.03k) for the k-th projected year, calibrated on hindcasts',
+      method: future[0].filled
+        ? 'No complete record in this cell, so the projected map is filled from neighboring cells'
+        : future[0].complete === false
+          ? 'Years present in the latest 30-year window, continued forward. No 95% range: the window is incomplete'
+          : 'Trend of ' + (lastYear - WINDOW + 1) + '-' + lastYear + ' continued, damped by 1 - 1/t^2 when weak; ' +
+            '95% range is the Student t prediction interval (28 degrees of freedom) widened by min(2, 1.25 + 0.03k) for the k-th projected year, calibrated on hindcasts',
       trend_weight: round(future[0].weight),
       one_possible_year: 'value plus the departure from trend of a past year in the window; this is what the map shows',
       caution: 'Statistical extrapolation of past data. Not a climate model forecast.',

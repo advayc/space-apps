@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Explore how Earth’s climate has changed over time. Pick a variable, place, and year to see anomalies and trends.">
 <meta name="theme-color" content="#f2f0e9">
+<meta property="og:site_name" content="Earth Trend Atlas">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://space.advay.ca/">
+<meta property="og:title" content="Earth Trend Atlas">
+<meta property="og:description" content="See how the climate has changed where you live. Anomalies, trends, and a projection to 2100.">
+<meta property="og:image" content="https://space.advay.ca/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Earth Trend Atlas. See how the climate has changed where you live. A world map of temperature anomalies.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Earth Trend Atlas">
+<meta name="twitter:description" content="See how the climate has changed where you live. Anomalies, trends, and a projection to 2100.">
+<meta name="twitter:image" content="https://space.advay.ca/assets/og.png">
 <title>Earth Trend Atlas</title>
 <link rel="preload" href="assets/catalog.json" as="fetch" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,7 +60,10 @@
         <span>Global average temperature, compared with 1951–1980</span>
         <output id="record-readout" class="record-readout"></output>
       </figcaption>
-      <svg id="record-bars" role="img" aria-label="Bar chart of global average temperature anomaly for each year from 1880 to 2025, rising from about minus 0.2 to plus 1.2 degrees Celsius, continued to 2100 as a projection with an uncertainty range that widens with time." preserveAspectRatio="none"></svg>
+      <div class="record-body">
+        <div class="record-y" id="record-y" aria-hidden="true"></div>
+        <svg id="record-bars" role="img" aria-label="Bar chart of global average temperature anomaly for each year from 1880 to 2025, rising from about minus 0.2 to plus 1.2 degrees Celsius, continued to 2100 as a projection with an uncertainty range that widens with time. The vertical axis is degrees Celsius relative to 1951–1980." preserveAspectRatio="none"></svg>
+      </div>
       <div class="record-axis" id="record-axis" aria-hidden="true"></div>
       <p class="record-key">
         <span><i class="key-obs"></i>Measured, one bar per year</span>
@@ -101,7 +117,7 @@
         <div class="map-footer">
           <div class="map-legend"><div id="legend-title">Anomaly (°C)</div><div class="ramp" id="ramp"></div><div class="ticks"><span id="legend-min"></span><span>0</span><span id="legend-max"></span></div></div>
           <div class="nodata"><i></i> No data</div>
-          <div class="map-tools" id="flat-tools" role="group" aria-label="Flat map zoom" hidden>
+          <div class="map-tools" id="flat-tools" role="group" aria-label="Map view">
             <button id="map-zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
             <button id="map-zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
             <button id="map-zoom-reset" type="button" title="Reset map view" aria-label="Reset map view">Reset</button>
