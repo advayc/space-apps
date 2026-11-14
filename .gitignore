@@ -2,3 +2,6 @@
 __pycache__/
 .openai/*
 !.openai/hosting.json
+.vercel/
+*.nc
+*.nc.gz
