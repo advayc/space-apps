@@ -332,9 +332,23 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .source-table.hindcast th[scope=colgroup]{text-align:center;border-left:1px solid var(--line)}
 .source-table.hindcast tbody td:nth-child(3n),.source-table.hindcast thead tr:last-child th:nth-child(3n+1){border-left:1px solid var(--line)}
 .source-table.hindcast td.na{color:var(--muted);font-size:12px;text-align:center;border-left:1px solid var(--line)}
-.methods-page:has(.hindcast){width:min(1060px,100%)}
-.methods-page:has(.hindcast) .methods>section>p,.methods-page:has(.hindcast) .methods h1{max-width:72ch}
 .source-table.hindcast{font-size:12.5px}
 .source-table.hindcast th,.source-table.hindcast td{padding:8px 9px}
 .source-table.hindcast tbody th{min-width:9.5rem}
 @media(max-width:560px){.record-axis span:is([data-year="1920"],[data-year="2075"]){display:none}}
+
+/* Projections page: one text column that prose, lists and equations share.
+   Only the hindcast table is allowed to run wider than it. */
+.methods-page:has(.hindcast){width:min(1060px,100%)}
+.methods-page:has(.hindcast) .methods{--col:min(100%,46rem)}
+.methods-page:has(.hindcast) .methods :is(h1,h2,p,ol.plain,.eq){max-width:var(--col)}
+.methods-page:has(.hindcast) .methods section{padding:22px 0 26px}
+.methods-page:has(.hindcast) .methods h2{font:650 21px/1.2 var(--display);letter-spacing:-.015em;margin:0 0 10px}
+.methods-page:has(.hindcast) .methods p{font-size:15.5px;line-height:1.7}
+.methods-page:has(.hindcast) .methods p+p{margin-top:10px}
+.methods .eq{margin:14px 0;padding:10px 0 10px 16px;border-left:3px solid var(--proj);background:linear-gradient(90deg,color-mix(in srgb,var(--proj) 7%,transparent),transparent 85%);overflow-x:auto;overflow-y:hidden}
+.methods .eq .katex-display{margin:0;padding:2px 0;text-align:left;overflow:visible}
+.methods .eq .katex-display>.katex{text-align:left}
+.methods .eq .katex-display>.katex>.katex-html{text-align:left}
+.methods-page:has(.hindcast) .source-table-wrap{margin-top:16px}
+.methods-page:has(.hindcast) .source-table-wrap+p{margin-top:18px}

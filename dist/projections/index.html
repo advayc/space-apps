@@ -47,51 +47,59 @@
     <section>
       <h2>Trend fit</h2>
       <p>Write the window values as \(y_i\) for \(i = 0,\ldots,29\), centered time \(x_i = i - \bar{x}\) with \(\bar{x} = 14.5\), and window mean \(\bar{y}\). The ordinary least-squares slope is</p>
-      $$
-      b = \frac{\sum_{i=0}^{29} x_i\,(y_i - \bar{y})}{\sum_{i=0}^{29} x_i^2},\qquad
-      \sum_{i=0}^{29} x_i^2 = \frac{30(30^2-1)}{12} = 2247.5.
-      $$
+      <div class="eq">$$
+      \begin{aligned}
+      &b = \frac{\sum_{i=0}^{29} x_i\,(y_i - \bar{y})}{\sum_{i=0}^{29} x_i^2}, \\[8pt]
+      &\sum_{i=0}^{29} x_i^2 = \frac{30(30^2-1)}{12} = 2247.5.
+      \end{aligned}
+      $$</div>
       <p>Residual standard deviation (28 degrees of freedom) and the slope’s \(t\) statistic are</p>
-      $$
-      s = \sqrt{\frac{1}{28}\sum_{i=0}^{29}\bigl(y_i - \bar{y} - b x_i\bigr)^2},\qquad
-      t = \frac{b}{s\big/\sqrt{\sum x_i^2}}.
-      $$
+      <div class="eq">$$
+      \begin{aligned}
+      &s = \sqrt{\frac{1}{28}\sum_{i=0}^{29}\bigl(y_i - \bar{y} - b x_i\bigr)^2}, \\[8pt]
+      &t = \frac{b}{s\big/\sqrt{\sum x_i^2}}.
+      \end{aligned}
+      $$</div>
     </section>
 
     <section>
       <h2>Damped central estimate</h2>
       <p>Weak trends relative to year-to-year noise should not be projected at full strength. The atlas uses the James–Stein-style weight</p>
-      $$
+      <div class="eq">$$
       w = \begin{cases}
       1 - \dfrac{1}{t^2} & \text{if } |t| &gt; 1,\\[0.6em]
       0 & \text{otherwise.}
       \end{cases}
-      $$
+      $$</div>
       <p>A step \(h\) years after the window midpoint (\(h = 14.5 + k + 1\) for the \(k\)-th future year, \(k = 0,1,\ldots\)) has central estimate</p>
-      $$
+      <div class="eq">$$
       \hat{y}(h) = \bar{y} + w\,b\,h.
-      $$
+      $$</div>
       <p>If \(|t|\le 1\), the projection collapses to the recent mean. Temperature layers usually keep \(w\) near 1; noisy fields often shrink toward 0.</p>
     </section>
 
     <section>
       <h2>95% range</h2>
       <p>The location chart shows a classical Student-\(t\) prediction interval for one future observation, widened by a factor \(c_k\) that grows with the lead time:</p>
-      $$
-      \hat{y}(h) \;\pm\; c_k\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}},
-      \qquad c_k = \min\bigl(2,\; 1.25 + 0.03\,k\bigr),
-      \qquad t_{0.975,\,28} \approx 2.048,
-      $$
+      <div class="eq">$$
+      \begin{aligned}
+      &\hat{y}(h) \;\pm\; c_k\,t_{0.975,\,28}\,s\,\sqrt{1 + \frac{1}{30} + \frac{h^2}{\sum x_i^2}}, \\[8pt]
+      &c_k = \min\bigl(2,\; 1.25 + 0.03\,k\bigr), \\[8pt]
+      &t_{0.975,\,28} \approx 2.048,
+      \end{aligned}
+      $$</div>
       <p>where \(k = 0, 1, \ldots, 74\) counts projected years (2026 to 2100). The textbook interval assumes the 30-year line keeps going unchanged. Real trends bend: warming stalled in the mid-20th century and then sped up. The hindcast below found the textbook band held only 81–90% of later measurements beyond 25 years, so \(c_k\) was chosen to bring every lead time back to about 95%. It still omits structural breaks larger than any seen in the record, and dataset inhomogeneity.</p>
     </section>
 
     <section>
       <h2>One possible year on the map</h2>
       <p>Real years do not sit on a line. For calendar year \(Y\), the map adds the residual of one past window year</p>
-      $$
-      j = \bigl(Y\cdot 2654435761\bigr) \bmod 30,\qquad
-      \tilde{y}(h) = \hat{y}(h) + \bigl(y_j - \bar{y} - b x_j\bigr).
-      $$
+      <div class="eq">$$
+      \begin{aligned}
+      &j = \bigl(Y\cdot 2654435761\bigr) \bmod 30, \\[8pt]
+      &\tilde{y}(h) = \hat{y}(h) + \bigl(y_j - \bar{y} - b x_j\bigr).
+      \end{aligned}
+      $$</div>
       <p>The same \(j\) is used for every cell in that year, so spatial warm/cool patterns stay coherent. That map field is one plausible year under the fitted noise, not a forecast of that exact year. The side panel’s central value and range use \(\hat{y}(h)\), not \(\tilde{y}(h)\).</p>
     </section>
 
