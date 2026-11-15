@@ -594,6 +594,7 @@ function updateInspector() {
   const otherFuture = others.some(o => o.future);
   chartData = {series, central, idx, index, estimate, basis, future, other, others};
   updateZoomControls();
+  updateScatter();
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
   $('resolution').textContent = active.step + '° grid';
@@ -2359,6 +2360,167 @@ function saveBlob(blob, name) {
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ---------- Scatterplot: two variables at the same place, one point per year ----------
+let scatterKey = '', scatterVersion = 0, scatterData = null, scatterHover = null, scatterLayout = null;
+
+function detrend(values) {
+  const n = values.length, mx = (n - 1) / 2, my = values.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0;
+  values.forEach((v, i) => { sxy += (i - mx) * (v - my); sxx += (i - mx) ** 2; });
+  const slope = sxx ? sxy / sxx : 0;
+  return values.map((v, i) => v - slope * (i - mx));
+}
+
+function correlation(xs, ys) {
+  const n = xs.length;
+  if (n < 3) return null;
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; syy += (ys[i] - my) ** 2; }
+  if (!sxx || !syy) return null;
+  const slope = sxy / sxx;
+  return {r: sxy / Math.sqrt(sxx * syy), slope, intercept: my - slope * mx, n};
+}
+
+async function updateScatter() {
+  const key = $('scatter-layer').value;
+  for (const option of $('scatter-layer').options) option.disabled = option.value === layer;
+  const version = ++scatterVersion;
+  scatterData = scatterHover = null;
+  $('scatter-body').hidden = !key;
+  $('scatter-csv').disabled = true;
+  if (!key || !active || !chartData) { $('scatter-summary').textContent = ''; return; }
+  if (key === layer) {
+    $('scatter-summary').textContent = 'Pick a different variable from the one on the map.';
+    drawScatter();
+    return;
+  }
+  $('scatter-summary').textContent = 'Loading ' + catalog[key].name + '…';
+  drawScatter();
+  let second;
+  try {
+    second = await loadDataset(key, periodKey());
+  } catch {
+    if (version === scatterVersion) $('scatter-summary').textContent = catalog[key].name + ' could not load for this period.';
+    return;
+  }
+  if (version !== scatterVersion) return;
+  // The second layer may use a different grid, so look its cell up from the same coordinates.
+  const step = 360 / second.width;
+  const [lon, lat] = cell(point).center;
+  const col = clamp(Math.floor((((lon + 180) % 360 + 360) % 360) / step), 0, second.width - 1);
+  const row = clamp(Math.floor((90 - lat) / step), 0, second.height - 1);
+  const index = row * second.width + col;
+  const byYear = new Map();
+  for (let i = 0; i < second.observed; i++) byYear.set(second.years[i], second.values[i * second.size + index]);
+  const points = [];
+  for (let i = 0; i < active.observed; i++) {
+    const x = chartData.series[i] ?? history(chartData.index)[i], y = byYear.get(active.years[i]);
+    if (Number.isFinite(x) && Number.isFinite(y)) points.push({year: active.years[i], x, y});
+  }
+  scatterData = {key, second, points};
+  drawScatter();
+}
+
+function drawScatter() {
+  const canvas = $('scatter');
+  const [w, h] = sizeCanvas(canvas);
+  if (!w || !h) return;
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  scatterLayout = null;
+  $('scatter-tooltip').hidden = true;
+  if (!scatterData) return;
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const c = chartColors(dark);
+  const {second, points} = scatterData;
+  const flat = $('scatter-detrend').checked;
+  const xs = flat ? detrend(points.map(p => p.x)) : points.map(p => p.x);
+  const ys = flat ? detrend(points.map(p => p.y)) : points.map(p => p.y);
+  const fit = correlation(xs, ys);
+  $('scatter-csv').disabled = !points.length;
+  const period = periodTitle() === 'Annual' ? 'year' : periodTitle();
+  if (!fit) {
+    $('scatter-summary').textContent = points.length
+      ? 'Only ' + points.length + ' years have both variables here, too few for a correlation.'
+      : 'No years have both variables at this place. Sea-only and land-only layers do not overlap.';
+    if (!points.length) return;
+  } else {
+    const size = Math.abs(fit.r), strength = size < .2 ? 'No clear' : size < .4 ? 'A weak' : size < .7 ? 'A moderate' : 'A strong';
+    $('scatter-summary').textContent = 'r = ' + signed(fit.r) + ' · ' + strength +
+      (size < .2 ? '' : fit.r > 0 ? ' positive' : ' negative') + ' relationship across ' + fit.n + ' years (' +
+      points[0].year + '–' + points.at(-1).year + '). ' + Math.round(fit.r * fit.r * 100) + '% of the variation is shared' +
+      (flat ? ', after removing each variable’s own trend.' : '.');
+  }
+  const pad = (lo, hi) => { const m = (hi - lo || 1) * .06; return [lo - m, hi + m]; };
+  const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
+  const left = 52, right = w - 10, top = 10, bottom = h - 38;
+  const px = v => left + (v - x0) / (x1 - x0) * (right - left), py = v => bottom - (v - y0) / (y1 - y0) * (bottom - top);
+  g.font = '10px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const vx = x0 + (x1 - x0) * i / 4, vy = y0 + (y1 - y0) * i / 4;
+    g.strokeStyle = c.grid;
+    g.beginPath(); g.moveTo(px(vx), top); g.lineTo(px(vx), bottom); g.moveTo(left, py(vy)); g.lineTo(right, py(vy)); g.stroke();
+    g.textAlign = i === 0 ? 'left' : i === 4 ? 'right' : 'center'; g.fillText(signed(vx, 1), px(vx), bottom + 13);
+    g.textAlign = 'right'; g.fillText(signed(vy, 1), left - 6, py(vy) + 3);
+  }
+  for (const [zero, vertical] of [[0, true], [0, false]]) {
+    g.strokeStyle = c.zero; g.beginPath();
+    if (vertical && x0 < 0 && x1 > 0) { g.moveTo(px(zero), top); g.lineTo(px(zero), bottom); }
+    if (!vertical && y0 < 0 && y1 > 0) { g.moveTo(left, py(zero)); g.lineTo(right, py(zero)); }
+    g.stroke();
+  }
+  g.font = '11px "IBM Plex Sans", sans-serif'; g.textAlign = 'center';
+  g.fillText(active.name + ' (' + active.unit + ')', (left + right) / 2, h - 5);
+  g.save(); g.translate(11, (top + bottom) / 2); g.rotate(-Math.PI / 2);
+  g.fillText(second.name + ' (' + second.unit + ')', 0, 0); g.restore();
+  if (fit) {
+    g.save(); g.beginPath(); g.rect(left, top, right - left, bottom - top); g.clip();
+    g.beginPath(); g.moveTo(px(x0), py(fit.intercept + fit.slope * x0)); g.lineTo(px(x1), py(fit.intercept + fit.slope * x1));
+    g.strokeStyle = c.fit; g.lineWidth = 2; g.stroke(); g.restore();
+  }
+  // Older years are faint and recent years solid, so a drift over time shows up.
+  points.forEach((point, i) => {
+    g.globalAlpha = .25 + .75 * i / Math.max(1, points.length - 1);
+    g.beginPath(); g.arc(px(xs[i]), py(ys[i]), i === scatterHover ? 5.5 : 3.2, 0, Math.PI * 2);
+    g.fillStyle = c.line; g.fill();
+  });
+  g.globalAlpha = 1;
+  scatterLayout = {px, py, xs, ys};
+  if (scatterHover != null && points[scatterHover]) {
+    const i = scatterHover, tooltip = $('scatter-tooltip');
+    g.beginPath(); g.arc(px(xs[i]), py(ys[i]), 5.5, 0, Math.PI * 2); g.strokeStyle = c.marker; g.lineWidth = 1.5; g.stroke();
+    tooltip.textContent = points[i].year + '\n' + active.name + ' ' + signed(points[i].x) + ' ' + active.unit +
+      '\n' + second.name + ' ' + signed(points[i].y) + ' ' + second.unit;
+    tooltip.hidden = false;
+    tooltip.style.left = clamp(px(xs[i]) < w / 2 ? px(xs[i]) + 10 : px(xs[i]) - tooltip.offsetWidth - 10, 0, w - tooltip.offsetWidth) + 'px';
+    tooltip.style.top = clamp(py(ys[i]) - tooltip.offsetHeight - 8, 0, h - tooltip.offsetHeight) + 'px';
+  }
+}
+
+$('scatter-layer').addEventListener('change', updateScatter);
+$('scatter-detrend').addEventListener('change', drawScatter);
+$('scatter').addEventListener('pointermove', event => {
+  if (!scatterLayout) return;
+  const box = $('scatter').getBoundingClientRect(), mx = event.clientX - box.left, my = event.clientY - box.top;
+  let best = null, bestD = 18 * 18;
+  scatterLayout.xs.forEach((x, i) => {
+    const d = (scatterLayout.px(x) - mx) ** 2 + (scatterLayout.py(scatterLayout.ys[i]) - my) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (best !== scatterHover) { scatterHover = best; drawScatter(); }
+});
+$('scatter').addEventListener('pointerleave', () => { if (scatterHover != null) { scatterHover = null; drawScatter(); } });
+new ResizeObserver(() => { if (scatterData) drawScatter(); }).observe($('scatter'));
+$('scatter-csv').addEventListener('click', () => {
+  if (!scatterData) return;
+  const {second, points, key} = scatterData;
+  const rows = [['year', active.name + ' (' + active.unit + ')', second.name + ' (' + second.unit + ')']]
+    .concat(points.map(p => [p.year, p.x, p.y]));
+  saveBlob(new Blob([rows.map(row => row.map(v => typeof v === 'string' ? '"' + v + '"' : v).join(',')).join('\n') + '\n'],
+    {type: 'text/csv'}), exportName('vs-' + key, 'csv'));
+});
+
 function exportName(kind, extension) {
   const {center} = cell(point);
   return [layer, periodKey(), center[1], center[0], kind].join('-') + '.' + extension;
@@ -2614,6 +2776,8 @@ function populateLayers() {
     groups.get(data.group).append(new Option(data.name, key));
   }
   $('layer').replaceChildren(...groups.values());
+  $('scatter-layer').replaceChildren(new Option('Choose a second variable…', ''),
+    ...[...groups.values()].map(group => group.cloneNode(true)));
   $('layer').value = layer;
   $('layer').disabled = false;
 }
