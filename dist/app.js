@@ -1374,6 +1374,19 @@ function monthlyRecords() {
   return records.filter(record => record.date > monthlyDate - span && record.date <= monthlyDate);
 }
 
+// Least-squares line through A's months in the visible window; null with fewer than 3 values.
+function monthlyFit(records) {
+  let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+  records.forEach((record, i) => {
+    if (!Number.isFinite(record.primary)) return;
+    n++; sx += i; sy += record.primary; sxx += i * i; sxy += i * record.primary;
+  });
+  const spread = n * sxx - sx * sx;
+  if (n < 3 || !spread) return null;
+  const slope = (n * sxy - sx * sy) / spread;
+  return {slope, intercept: (sy - slope * sx) / n, perYear: slope * 12, count: n};
+}
+
 function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
   const a = records.map(record => record.primary);
   const rest = (records[0]?.others ?? []).map((_, n) => records.map(record => record.others[n]));
@@ -1394,13 +1407,22 @@ function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
   }
   rest.forEach((b, n) => paintSeries(g, b, 0, b.length, x, y, compareColor(n, dark), 1.5 * k));
   paintSeries(g, a, 0, a.length, x, y, c.line, 1.5 * k);
+  const fit = monthlyFit(records);
+  if (fit) {
+    const end = records.length - 1;
+    g.save();
+    g.beginPath(); g.rect(left, top - 4 * k, right - left, bottom - top + 8 * k); g.clip();
+    g.beginPath(); g.moveTo(x(0), y(fit.intercept)); g.lineTo(x(end), y(fit.intercept + fit.slope * end));
+    g.strokeStyle = c.fit; g.lineWidth = 2 * k; g.stroke();
+    g.restore();
+  }
   const ticks = Math.max(2, Math.floor((right - left) / (70 * k)));
   for (let j = 0; j < ticks; j++) {
     const i = Math.round(j * (records.length - 1) / (ticks - 1));
     g.textAlign = j === 0 ? 'left' : j === ticks - 1 ? 'right' : 'center';
     g.fillText(monthlyLabel(records[i].date), x(i), h - 4 * k);
   }
-  return {left, right, top, bottom, x, y, c, hasData: finite.length > 0};
+  return {left, right, top, bottom, x, y, c, fit, hasData: finite.length > 0};
 }
 
 function drawMonthlyDetail() {
@@ -1422,6 +1444,7 @@ function drawMonthlyDetail() {
   const tooltip = $('chart-tooltip');
   tooltip.hidden = true;
   monthlyWindow = null;
+  $('chart-month-fit').hidden = true;
   $('chart-png').disabled = true;
   if (!ready) {
     $('chart-help').textContent = monthlyError ? 'Monthly data could not load. Choose Retry.' : 'Loading monthly observations…';
@@ -1431,8 +1454,11 @@ function drawMonthlyDetail() {
   const layout = paintMonthlyPlot(g, w, h, records, dark);
   $('chart-png').disabled = !layout.hasData;
   monthlyWindow = {records, ...layout};
+  $('chart-month-fit').hidden = !layout.fit;
+  if (layout.fit) $('chart-month-fit-text').textContent = 'Line of best fit' + (records[0].others.length ? ' for A' : '') +
+    ' · ' + signed(layout.fit.perYear) + ' ' + active.unit + ' per year over these ' + records.length + ' months';
   $('chart-help').textContent = layout.hasData
-    ? 'Historical observations. Use + and − to zoom from 12 to 60 months. Drag to browse, or use the arrow keys to inspect a month.'
+    ? 'Historical observations. The line of best fit covers the months shown, so it changes as you zoom or drag. Use + and − to zoom from 12 to 60 months, or the arrow keys to inspect a month.'
     : 'No observations in this window. Drag or zoom out to browse other months.';
   const i = records.findIndex(record => record.date === monthlyCursor);
   if (i < 0) return;
@@ -2381,6 +2407,7 @@ $('chart-png').addEventListener('click', () => {
   const fit = chartFit(central);
   const legend = [[c.line, other ? 'A · ' + placeName : 'Measured', false]];
   for (const o of others) legend.push([compareColor(o.n, dark), o.label + ' · ' + o.name, false]);
+  if (showMonthly && monthlyWindow?.fit) legend.push([c.fit, 'Line of best fit · ' + signed(monthlyWindow.fit.perYear) + ' ' + active.unit + ' per year', false]);
   if (fit && !showMonthly) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
   if (future && !showMonthly) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
   if (others.some(o => o.future) && !showMonthly) legend.push([c.text, others.length > 1 ? 'Comparison projections' : 'B projection', true]);

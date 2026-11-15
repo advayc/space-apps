@@ -526,3 +526,5 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .place-panel .chart-legend,.legend-list > span,.map-places span{min-width:0;overflow-wrap:anywhere}
 .place-field{position:relative}
 .place-search .compare-hint{margin:0 0 6px}
+
+#full-chart:not(.showing-months) .month-legend{display:none}
