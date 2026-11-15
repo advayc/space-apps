@@ -184,10 +184,22 @@
         </dl>
         <p class="compare-trend" id="compare-trend" hidden></p>
       </section>
+      <figure class="chart-preview">
+        <figcaption class="chart-header">
+          <h3 id="chart-preview-title">Annual anomalies</h3>
+          <a class="method-link" href="#full-chart">View larger chart <span aria-hidden="true">↓</span></a>
+        </figcaption>
+        <canvas id="chart-preview" role="img" aria-label="Annual anomalies for the selected place across all years"></canvas>
+        <p class="chart-legend" aria-hidden="true">
+          <span><i class="lg lg-obs"></i><span id="preview-primary-legend">Measured</span></span>
+          <span id="preview-compare-legend" hidden><i class="lg lg-compare"></i>B record</span>
+          <span id="preview-projection-legend"><i class="lg lg-proj"></i>Projection</span>
+        </p>
+      </figure>
     </aside>
     <section class="inspector analysis" id="location-analysis" aria-labelledby="chart-title">
       <div class="analysis-body">
-        <section class="analysis-chart" aria-labelledby="chart-title">
+        <section class="analysis-chart" id="full-chart" tabindex="-1" aria-labelledby="chart-title">
           <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3>
             <div class="chart-zoom" role="group" aria-label="Zoom the years">
               <output id="zoom-range" class="zoom-range" aria-live="polite"></output>

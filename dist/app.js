@@ -338,6 +338,7 @@ function update(fade = 0, {scrub = false} = {}) {
   $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND'
     : (projectedNow ? 'PROJECTED ' : '') + mode.toUpperCase() + ' ANOMALY';
   $('chart-title').textContent = periodTitle() + ' anomalies';
+  $('chart-preview-title').textContent = $('chart-title').textContent;
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
@@ -574,6 +575,11 @@ function updateInspector() {
   $('chart-path-text').textContent = other ? 'A possible path' : 'One possible path';
   $('chart-compare-legend').hidden = !other;
   $('chart-compare-projection').hidden = !otherFuture;
+  $('preview-primary-legend').textContent = other ? 'A record' : 'Measured';
+  $('preview-compare-legend').hidden = !other;
+  $('preview-projection-legend').hidden = !future && !otherFuture;
+  $('chart-preview').setAttribute('aria-label', periodTitle() + ' anomalies across all years for ' + placeName +
+    (comparison ? ' and ' + comparison.name : ''));
   $('chart-help').textContent = (other ? 'Select two points to fit that span for A. Both records share the same scale.'
     : 'The line fits this place’s measured record. Select two points to fit that span.') +
     ' Zoom with + and −, a pinch, or Ctrl + scroll, then drag to move along the years.';
@@ -621,6 +627,7 @@ function updateInspector() {
   updateComparisonTrend(chartData, basis, estimate?.rate);
   updateChartInterval();
   drawChart();
+  drawChartPreview();
 }
 
 function historicalAverage(values, cellIndex) {
@@ -807,7 +814,7 @@ function paintSeries(g, values, start, end, x, y, color, weight) {
 
 // Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
 // strokes and type so the same routine serves the panel and the PNG export.
-function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
+function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true, overview = false} = {}) {
   const {series, central, idx, index, estimate, basis, future, other} = chartData;
   const c = chartColors(dark);
   const observedCount = active.observed;
@@ -818,7 +825,7 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.fillText(other ? 'No observations for either grid cell' : 'No observations for this grid cell', ox + 5 * k, oy + h / 2);
     return {left, right, bottom, top, x: () => left};
   }
-  const [v0, v1] = viewRange();
+  const [v0, v1] = overview ? [0, series.length - 1] : viewRange();
   const lo = Math.floor(v0), hi = Math.ceil(v1);
   const inView = (value, i) => i >= lo && i <= hi && Number.isFinite(value);
   const visible = series.filter(inView).concat((other?.values ?? []).filter(inView));
@@ -901,7 +908,7 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   g.font = 9 * k + 'px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.textAlign = 'left';
   for (const tick of yTicks) g.fillText(signed(tick, 1), ox, clamp(y(tick) + 3 * k, oy + 9 * k, bottom + 2 * k));
   const axisY = oy + h - 3 * k;
-  if (chartView) {
+  if (chartView && !overview) {
     // Zoomed: round-number years spaced so the labels never touch.
     const maxTicks = Math.max(2, Math.floor((right - left) / (46 * k)));
     const step = [1, 2, 5, 10, 20, 25, 50].find(s => (v1 - v0) / s <= maxTicks) ?? 50;
@@ -923,6 +930,17 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   }
   g.textAlign = 'left';
   return {left, right, bottom, top, x, y, c};
+}
+
+function drawChartPreview() {
+  if (!active || !chartData) return;
+  const preview = $('chart-preview');
+  const [width, height] = sizeCanvas(preview);
+  if (!width || !height) return;
+  const g = preview.getContext('2d');
+  const dark = document.documentElement.dataset.theme === 'dark';
+  g.clearRect(0, 0, width, height);
+  paintChart(g, 0, 0, width, height, {dark, interactive: false, overview: true});
 }
 
 function chartPointLabel(index) {
@@ -2160,6 +2178,7 @@ function populateLayers() {
 document.addEventListener('atlas-theme-change', () => { if (active) updateInspector(); });
 new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
+new ResizeObserver(drawChartPreview).observe($('chart-preview'));
 
 try {
   // Start the default layer's download the moment the catalog arrives,
