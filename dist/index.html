@@ -356,6 +356,35 @@
           </aside>
         </div>
       </div>
+      <section class="hydrology" aria-labelledby="hydrology-title">
+        <div class="hydrology-heading">
+          <div><h3 id="hydrology-title">Explore NASA hydrology data</h3>
+            <p class="chart-help">Download a NASA GLDAS time series for the selected location, then open the CSV here to explore it.</p></div>
+          <a class="method-link" href="https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series" target="_blank" rel="noopener noreferrer">About NASA’s tool <span aria-hidden="true">↗</span></a>
+        </div>
+        <p id="hydrology-location" class="hydrology-location"></p>
+        <div class="hydrology-fields">
+          <label>NASA variable<select id="hydrology-variable">
+            <option value="GLDAS_NOAH025_M_2_1_SoilMoi0_10cm_inst">Topsoil moisture (0–10 cm)</option>
+            <option value="GLDAS_NOAH025_M_2_1_RootMoist_inst">Root-zone soil moisture</option>
+            <option value="GLDAS_NOAH025_M_2_1_Evap_tavg">Evapotranspiration</option>
+            <option value="GLDAS_NOAH025_M_2_1_Rainf_f_tavg">Precipitation rate</option>
+            <option value="GLDAS_NOAH025_M_2_1_SWE_inst">Snow water equivalent</option>
+          </select></label>
+          <label>From <input id="hydrology-start" type="date" value="2000-01-01" min="2000-01-01"></label>
+          <label>To <input id="hydrology-end" type="date" value="2025-12-31" min="2000-01-01"></label>
+        </div>
+        <div class="hydrology-actions"><a id="hydrology-download" class="utility" target="_blank" rel="noopener noreferrer">Download NASA CSV ↗</a>
+          <label class="utility hydrology-upload">Open downloaded CSV<input id="hydrology-file" type="file" accept=".csv,text/csv,text/plain"></label>
+          <button id="hydrology-clear" class="utility" type="button" hidden>Clear chart</button></div>
+        <p id="hydrology-status" class="chart-help" role="status">NASA may ask you to sign in with Earthdata Login. GLDAS covers land; ocean locations have no data.</p>
+        <div id="hydrology-chart-wrap" class="hydrology-chart" hidden>
+          <h4 id="hydrology-chart-title"></h4><p id="hydrology-meta" class="chart-help"></p>
+          <canvas id="hydrology-chart" role="img" aria-label="Imported NASA hydrology time series"></canvas>
+          <p class="chart-help">Values are from the imported file; they are not Atlas anomalies or projections. Compare like units and periods.</p>
+        </div>
+        <p class="chart-help">NASA GLDAS-2.1 Noah monthly model estimates, 0.25° land grid, beginning in 2000. Grid cells and variables differ from Atlas’s NOAA soil-moisture layer. <a href="https://ldas.gsfc.nasa.gov/gldas/dataset" target="_blank" rel="noopener noreferrer">Dataset details</a>.</p>
+      </section>
       <div class="downloads">
         <h3>Download for your own analysis</h3>
         <div class="download-grid">

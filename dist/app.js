@@ -1,6 +1,7 @@
 import { WINDOW, slopeAt, trend, forecast, extendGrid } from './statistics.js';
 import { implications } from './implications.js';
 import { months, seasons, dateLabel, makeTimeline, nearestIndex, futureYears } from './timeline.js';
+import { initHydrology, updateHydrologyPlace } from './hydrology.js';
 
 const $ = id => document.getElementById(id);
 const earth = $('earth');
@@ -601,6 +602,7 @@ function updateInspector() {
   updateScatter();
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(point);
+  updateHydrologyPlace(point, placeName);
   $('resolution').textContent = active.step + '° grid';
   updateLocationValues(chartData, idx);
   updateHistoricalAverages(chartData);
@@ -2991,6 +2993,7 @@ document.addEventListener('atlas-theme-change', () => { if (active) updateInspec
 new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
 new ResizeObserver(drawChart).observe($('chart-preview'));
+initHydrology();
 
 try {
   // Start the default layer's download the moment the catalog arrives,
