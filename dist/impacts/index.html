@@ -36,7 +36,7 @@
     <p>A global average hides the places that are changing fastest. GQ Atlas, by The Sonic Waves, is built so you can read that difference yourself, starting from <a href="https://data.giss.nasa.gov/gistemp/" target="_blank" rel="noopener">NASA GISTEMP v4</a>, the surface temperature record from NASA’s Goddard Institute for Space Studies.</p>
 
     <nav class="methods-contents" aria-label="On this page">
-      <a href="#why">Why this matters</a><a href="#uneven">Uneven change</a><a href="#environments">Effects on environments</a><a href="#what-you-can-do">What you can do</a><a href="#next-steps">Next steps</a>
+      <a href="#why">Why this matters</a><a href="#uneven">Uneven change</a><a href="#environments">Effects on environments</a><a href="#animals">Animals on the move</a><a href="#what-you-can-do">What you can do</a><a href="#next-steps">Next steps</a>
     </nav>
 
     <section id="why">
@@ -72,6 +72,46 @@
       <p>People feel this in the same uneven way. Communities that already live with thin ice, hot seasons, or unreliable rain have less slack. A year that is “a bit warm” on a global chart can be a failed hunt, a failed harvest, or a heat wave in a city with little shade. The atlas is a way to put a number on that local departure, including whether the 30-year trend at that cell is distinguishable from no change.</p>
     </section>
 
+    <section id="animals">
+      <h2>Animals on the move</h2>
+      <p>Animals live where the temperature, water and food suit them. When those conditions shift across the map, the animals follow, or try to. The IPCC’s latest assessment looked at more than 4,000 species where the cause could be tested: about half had moved their ranges toward the poles or up mountainsides, and two-thirds of spring events such as breeding and migration now happen earlier. Sea life is moving fastest, with ocean species shifting toward the poles by about 59 km per decade on average. On land, a review of 54 studies in the journal <i>Science</i> found a median shift of 16.9 km per decade toward the poles and 11 m per decade uphill.</p>
+      <div class="animal-photos">
+        <figure>
+          <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Arctic_fox_pups_animals.jpg?width=700" alt="Arctic fox pups sitting together on the tundra." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.closest('figure').hidden=true">
+          <figcaption>Arctic fox pups. Red foxes are moving north into their range. <span class="credit">U.S. Fish and Wildlife Service, public domain · <a href="https://commons.wikimedia.org/wiki/File:Arctic_fox_pups_animals.jpg" target="_blank" rel="noopener">source</a></span></figcaption>
+        </figure>
+        <figure>
+          <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Ursus_maritimus_us_fish.jpg?width=700" alt="Polar bear cubs in Alaska." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.closest('figure').hidden=true">
+          <figcaption>Polar bear cubs in Alaska. Less sea ice means less time to hunt seals. <span class="credit">U.S. Fish and Wildlife Service, public domain · <a href="https://commons.wikimedia.org/wiki/File:Ursus_maritimus_us_fish.jpg" target="_blank" rel="noopener">source</a></span></figcaption>
+        </figure>
+        <figure>
+          <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Tufted_puffins_(9192590883).jpg?width=700" alt="Two tufted puffins with orange bills and pale head plumes." loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.closest('figure').hidden=true">
+          <figcaption>Tufted puffins. When fish follow cooler water away, chicks go hungry. <span class="credit">U.S. Fish and Wildlife Service, public domain · <a href="https://commons.wikimedia.org/wiki/File:Tufted_puffins_(9192590883).jpg" target="_blank" rel="noopener">source</a></span></figcaption>
+        </figure>
+      </div>
+
+      <figure class="proj-figure range-figure">
+        <figcaption class="proj-head">
+          <span>How far does a home range move?</span>
+          <output id="range-readout" class="proj-readout" for="range-years"></output>
+        </figcaption>
+        <label class="range-control" for="range-years">Years from now
+          <input id="range-years" type="range" min="0" max="80" step="5" value="30">
+        </label>
+        <svg id="range-chart" role="img" aria-labelledby="range-summary"></svg>
+        <p id="range-summary" class="range-summary" aria-live="polite"></p>
+        <p class="chart-help">Drag the slider. The distances use the average speeds measured so far and assume they continue. Individual species differ a lot: some move much faster, some not at all, and some move the other way.</p>
+      </figure>
+      <ul class="next-steps">
+        <li><b>Routes and ranges move.</b> Fish follow cooler water toward the poles, which takes them away from the communities and seabirds that depend on them. On land, southern species push north: red foxes now compete with Arctic foxes on the tundra.</li>
+        <li><b>Timing slips out of step.</b> Many migrants leave on cues such as day length, which do not change, while spring at their destination arrives earlier. Birds and caribou can arrive after the peak of the insects or plants their young need.</li>
+        <li><b>Some have nowhere to go.</b> Animals already at the top of a mountain or the edge of the sea ice cannot move further. Others are blocked by cities, farms, roads and dams.</li>
+        <li><b>Stopovers dry up.</b> Long-distance migrants rely on wetlands and coasts to rest and feed along the way. Drought and rising seas remove links in that chain.</li>
+      </ul>
+      <p>You can see the conditions behind these shifts in the atlas. Compare the temperature trend at the southern and northern ends of a flyway, check how sea ice has changed along an Arctic coast, or look at sea surface temperature where a fishery used to be. The atlas shows the climate, not the animals, so pair it with wildlife records for your region.</p>
+      <p class="impact-source">Sources: <a href="https://www.ipcc.ch/report/ar6/wg2/chapter/chapter-2" target="_blank" rel="noopener">IPCC Sixth Assessment Report, Working Group II, Chapter 2</a> (share of species shifting, earlier spring events) and its <a href="https://www.ipcc.ch/report/ar6/wg2/about/frequently-asked-questions/keyfaq2" target="_blank" rel="noopener">FAQ 2</a> (59 km per decade in the ocean); Chen and others, “Rapid range shifts of species associated with high levels of climate warming,” <i>Science</i> 333 (2011), <a href="https://doi.org/10.1126/science.1206432" target="_blank" rel="noopener">doi:10.1126/science.1206432</a> (16.9 km and 11 m per decade on land).</p>
+    </section>
+
     <section id="what-you-can-do">
       <h2>What you can do</h2>
       <p>Start with a comparison you can check. Pick your city and a place that is changing faster, such as the Arctic or a hot inland region. Read this year’s anomaly, the trend per decade, and the note on whether that trend is significant at 5%. If you cannot explain the difference in one sentence, the chart is doing its job: it is asking you to look again. The <a href="../projections/">projections page</a> says what the violet years are, and what they are not. They continue the recent line. They are not a forecast of future emissions.</p>
@@ -92,5 +132,7 @@
     </section>
   </article>
 </main>
+<script type="module" src="../lightbox.js"></script>
+<script type="module" src="range-shift.js"></script>
 </body>
 </html>
