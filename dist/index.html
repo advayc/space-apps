@@ -127,8 +127,6 @@
         </div>
         <div id="map-readout" class="map-readout">Hover over the map to inspect a cell.</div>
         <div class="map-places" id="map-places" hidden>
-          <span><i class="place-symbol primary-symbol" aria-hidden="true"></i><b>A</b> <span id="map-primary"></span></span>
-          <span><i class="place-symbol comparison-symbol" aria-hidden="true"></i><b>B</b> <span id="map-comparison"></span></span>
         </div>
       </div>
       <div class="timeline">
@@ -168,10 +166,10 @@
         <p class="place-hint">Jump to any listed city; analysis uses the nearest grid cell.</p>
         <div class="compare-controls">
           <button class="utility" id="compare" type="button" aria-pressed="false">Compare</button>
-          <button class="utility" id="compare-clear" type="button" hidden>Clear comparison</button>
+          <button class="utility" id="compare-clear" type="button" hidden>Clear all</button>
         </div>
-        <p class="comparison-place" id="comparison-place" hidden><b>B</b> <span id="comparison-name"></span></p>
-        <p class="compare-hint place-hint" id="compare-hint" hidden>Search for the comparison place or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
+        <ul class="comparison-list" id="comparison-list" aria-label="Places being compared" hidden></ul>
+        <p class="compare-hint place-hint" id="compare-hint" hidden>Search for a place to add, or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
         <span class="sr-only" id="compare-status" role="status"></span>
       </div>
       <section class="location-values" aria-label="Selected values">
@@ -179,9 +177,11 @@
         <dl class="numbers" id="numbers">
           <div><dt id="value-label">2025 anomaly</dt><dd id="value">—</dd></div>
           <div id="slope-metric"><dt>Trend per decade</dt><dd id="slope">—</dd></div>
-          <div id="other-metric" hidden><dt><b>B</b> The other place</dt><dd id="other-value">—</dd></div>
-          <div id="difference-metric" hidden><dt>Difference A − B</dt><dd id="difference-value">—</dd></div>
         </dl>
+        <table class="compare-values" id="compare-values" hidden>
+          <thead><tr><th scope="col">Place</th><th scope="col">Value</th><th scope="col">vs A</th></tr></thead>
+          <tbody id="compare-rows"></tbody>
+        </table>
         <p class="compare-trend" id="compare-trend" hidden></p>
       </section>
       <figure class="chart-preview">
@@ -206,7 +206,7 @@
         </div>
         <p class="chart-legend" aria-hidden="true">
           <span><i class="lg lg-obs"></i><span id="preview-primary-legend">Measured</span></span>
-          <span id="preview-compare-legend" hidden><i class="lg lg-compare"></i>B record</span>
+          <span id="preview-compare-legend" class="legend-list" hidden></span>
           <span id="preview-projection-legend"><i class="lg lg-proj"></i>Projection</span>
         </p>
       </figure>
@@ -233,11 +233,11 @@
           <output id="chart-readout" class="sr-only" aria-live="off"></output>
           <p class="chart-legend">
             <span><i class="lg lg-obs" aria-hidden="true"></i><span id="chart-primary-legend">Measured</span></span>
-            <span id="chart-compare-legend" hidden><i class="lg lg-compare" aria-hidden="true"></i>B record</span>
+            <span id="chart-compare-legend" class="legend-list" hidden></span>
             <span class="year-legend"><i class="lg lg-fit" aria-hidden="true"></i><span id="chart-fit-legend">Trend line</span></span>
             <span class="year-legend" id="chart-projection-legend"><i class="lg lg-proj" aria-hidden="true"></i><span id="chart-projection-text">Projection, with 95% range</span></span>
             <span class="year-legend" id="chart-path-legend"><i class="lg lg-sim" aria-hidden="true"></i><span id="chart-path-text">One possible path</span></span>
-            <span class="year-legend" id="chart-compare-projection" hidden><i class="lg lg-compare lg-dash" aria-hidden="true"></i>B projection</span>
+            <span class="year-legend" id="chart-compare-projection" hidden><i class="lg lg-dash lg-muted" aria-hidden="true"></i>B projection</span>
           </p>
           <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
           <span id="chart-announcement" class="sr-only" role="status"></span>
@@ -273,23 +273,21 @@
               <h3 id="averages-title">Historical averages</h3>
               <a href="data-and-methods/#historical-averages">How we calculate averages</a>
             </div>
-            <table class="averages-table">
+            <div class="averages-scroll"><table class="averages-table">
               <thead id="average-places" hidden>
-                <tr><td></td><th scope="col">A <span class="sr-only">This place</span></th><th scope="col">B <span class="sr-only">Comparison place</span></th></tr>
+                <tr id="average-head"><td></td><th scope="col">A <span class="sr-only">This place</span></th></tr>
               </thead>
               <tbody>
                 <tr>
                   <th scope="row"><span id="average-period">Annual baseline</span><small id="average-reference"></small></th>
                   <td id="average-baseline-a">—</td>
-                  <td id="average-baseline-b" hidden>—</td>
                 </tr>
                 <tr>
                   <th scope="row">Record average anomaly</th>
                   <td id="average-record-a">—</td>
-                  <td id="average-record-b" hidden>—</td>
                 </tr>
               </tbody>
-            </table>
+            </table></div>
             <p class="averages-note" id="average-baseline-note" hidden></p>
             <p class="averages-note">Record averages use available historical values only.</p>
           </section>

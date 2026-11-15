@@ -48,7 +48,26 @@ const DEFAULT_ROTATION = [93, -46];
 let catalog, land, borders, d3, globe, projection;
 let layer = 'temperature', view = 'map', mode = 'annual', year = 2025;
 let rotation = [...DEFAULT_ROTATION], zoom = 1, placeName = DEFAULT_PLACE.name, point = [DEFAULT_PLACE.lon, DEFAULT_PLACE.lat];
-let comparison = null, choosingComparison = false, primaryQuery = '';
+let comparisons = [], choosingComparison = false, primaryQuery = '';
+// Comparison places are lettered B, C, D… and take a color each, cycling after eight.
+const COMPARE_COLORS = {
+  light: ['#14688b', '#b5479b', '#a87900', '#00857a', '#7a5c3e', '#d1457a', '#5a6a7a', '#6b7a1e'],
+  dark: ['#8ed9f3', '#f4a3df', '#f0cf6b', '#7fe0d4', '#d9b896', '#ff9dbd', '#b9c7d4', '#c9d67a'],
+};
+const compareLabel = i => i < 25 ? String.fromCharCode(66 + i) : 'P' + (i + 2);
+const compareColor = (i, dark = document.documentElement.dataset.theme === 'dark') =>
+  COMPARE_COLORS[dark ? 'dark' : 'light'][i % COMPARE_COLORS.light.length];
+// Lets CSS pick the light or dark color without re-rendering on a theme change.
+function tint(element, i) {
+  element.style.setProperty('--cl', compareColor(i, false));
+  element.style.setProperty('--cd', compareColor(i, true));
+  return element;
+}
+function make(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let flatMap, flatZoom = 1, flatOffset = [0, 0];
@@ -495,15 +514,16 @@ function drawMap(fade) {
   drawLine(draw, land, '#122e3199', .68);
   drawLine(draw, borders, '#162e3140', .45);
   drawLine(draw, {type: 'Sphere'}, '#a3c5ba78', 1);
-  if (comparison) drawPlaceMarker(cell(comparison.point).center, true);
+  comparisons.forEach((place, i) => drawPlaceMarker(cell(place.point).center, i));
   drawPlaceMarker(cell(point).center);
   rendered = true;
 }
 
-function drawPlaceMarker(location, other = false) {
+function drawPlaceMarker(location, n = -1) {
   if (view === 'globe' && d3.geoDistance(location, projection.invert(projection.translate())) >= Math.PI / 2) return;
   const [x, y] = projection(location);
-  const color = other ? '#8ee3ff' : '#fffce8';
+  const other = n >= 0;
+  const color = other ? compareColor(n, true) : '#fffce8';
   ctx.beginPath();
   if (other) {
     ctx.moveTo(x, y - 11);
@@ -518,6 +538,13 @@ function drawPlaceMarker(location, other = false) {
   ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
   ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2);
   ctx.fillStyle = color; ctx.fill();
+  if (!comparisons.length) return;
+  ctx.font = '700 12px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const letter = other ? compareLabel(n) : 'A';
+  ctx.lineWidth = 4; ctx.strokeStyle = '#14282b'; ctx.lineJoin = 'round'; ctx.strokeText(letter, x + 14, y);
+  ctx.fillText(letter, x + 14, y);
+  ctx.textBaseline = 'alphabetic';
 }
 
 function drawLine(draw, feature, color, weight) {
@@ -545,7 +572,7 @@ function updateInspector() {
   let future = steps ? forecast(series, active.observed - 1, steps, active.years[active.observed]) : null;
   // Only the single-place view shows values filled from neighboring cells.
   if (!future && steps) {
-    if (comparison) {
+    if (comparisons.length) {
       series.fill(NaN, active.observed);
     } else {
       const tail = series.slice(active.observed);
@@ -556,11 +583,16 @@ function updateInspector() {
   }
   // Measured values, then the central projection (the map shows the simulated year instead).
   const central = future ? series.map((value, i) => i < active.observed ? value : future[i - active.observed].value) : series;
-  const otherIndex = comparison ? cell(comparison.point).index : null;
-  const otherSeries = comparison ? history(otherIndex).slice(0, active.observed) : [];
-  const otherFuture = steps && comparison ? forecast(otherSeries, active.observed - 1, steps, active.years[active.observed]) : null;
-  const other = comparison ? {index: otherIndex, values: otherSeries.concat(otherFuture?.map(f => f.value) ?? []), future: otherFuture} : null;
-  chartData = {series, central, idx, index, estimate, basis, future, other};
+  const others = comparisons.map((place, n) => {
+    const otherIndex = cell(place.point).index;
+    const measured = history(otherIndex).slice(0, active.observed);
+    const projected = steps ? forecast(measured, active.observed - 1, steps, active.years[active.observed]) : null;
+    return {index: otherIndex, name: place.name, label: compareLabel(n), n,
+      values: measured.concat(projected?.map(f => f.value) ?? []), future: projected};
+  });
+  const other = others[0] ?? null;
+  const otherFuture = others.some(o => o.future);
+  chartData = {series, central, idx, index, estimate, basis, future, other, others};
   updateZoomControls();
   $('place-name').textContent = placeName;
   $('coordinates').textContent = coords(center);
@@ -569,7 +601,7 @@ function updateInspector() {
   updateHistoricalAverages(chartData);
   setMetric($('slope'), estimate?.rate, active.unit, {stackUnit: active.unit.length > 3});
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + placeName +
-    (comparison ? ' and ' + comparison.name : '') +
+    comparisons.map(place => ' and ' + place.name).join('') +
     ', measured from ' + active.years[0] + ' to ' + active.years[active.observed - 1] +
     (steps ? ' and projected to ' + active.years.at(-1) : '') + '. Use arrow keys to inspect, Enter to select endpoints, and Escape to clear.');
   $('chart-primary-legend').textContent = other ? 'A record' : 'Measured';
@@ -578,22 +610,28 @@ function updateInspector() {
   $('chart-path-legend').hidden = !future;
   $('chart-projection-text').textContent = other ? 'A projection and range' : 'Projection, with 95% range';
   $('chart-path-text').textContent = other ? 'A possible path' : 'One possible path';
-  $('chart-compare-legend').hidden = !other;
+  for (const id of ['chart-compare-legend', 'preview-compare-legend']) {
+    $(id).hidden = !other;
+    $(id).replaceChildren(...others.map(o => make('span', {},
+      tint(make('i', {className: 'lg lg-cmp'}), o.n), o.label + ' ' + o.name)));
+  }
   $('chart-compare-projection').hidden = !otherFuture;
+  $('chart-compare-projection').lastChild.textContent = others.length > 1 ? 'Comparison projections' : 'B projection';
   $('preview-primary-legend').textContent = other ? 'A record' : 'Measured';
-  $('preview-compare-legend').hidden = !other;
   $('preview-projection-legend').hidden = !future && !otherFuture;
   $('chart-preview').setAttribute('aria-label', periodTitle() + ' anomalies for ' + placeName +
-    (comparison ? ' and ' + comparison.name : ''));
-  $('chart-help').textContent = (other ? 'Select two points to fit that span for A. Both records share the same scale.'
+    comparisons.map(place => ' and ' + place.name).join(''));
+  $('chart-help').textContent = (other ? 'Select two points to fit that span for A. All records share the same scale.'
     : 'The line fits this place’s measured record. Select two points to fit that span.') +
     ' Zoom with + and −, a pinch, or Ctrl + scroll, then drag to move along the years.';
   $('trend-title').textContent = other ? 'Trend significance for A' : 'Trend significance';
-  $('map-primary').textContent = placeName;
-  $('map-comparison').textContent = comparison?.name ?? '';
+  $('map-places').replaceChildren(
+    make('span', {}, make('i', {className: 'place-symbol primary-symbol'}), make('b', {}, 'A'), ' ' + placeName),
+    ...others.map(o => tint(make('span', {className: 'cmp-map'},
+      make('i', {className: 'place-symbol comparison-symbol'}), make('b', {}, o.label), ' ' + o.name), o.n)));
   const empty = !series.some(Number.isFinite);
   for (const id of ['csv', 'trend-json']) $(id).disabled = empty;
-  $('chart-png').disabled = empty && !other?.values.some(Number.isFinite);
+  $('chart-png').disabled = empty && !others.some(o => o.values.some(Number.isFinite));
   $('csv').querySelector('b').textContent = other ? 'Primary data and projection' : 'Data, trend line and projection';
   $('trend-json').querySelector('b').textContent = other ? 'Primary trend statistics' : 'Trend statistics';
   $('map-png').disabled = false;
@@ -651,11 +689,19 @@ function historicalAverage(values, cellIndex) {
   };
 }
 
-function updateHistoricalAverages({series, index, other}) {
+function updateHistoricalAverages({series, index, others}) {
   $('historical-averages').hidden = false;
-  $('average-places').hidden = !other;
-  $('average-baseline-b').hidden = !other;
-  $('average-record-b').hidden = !other;
+  $('average-places').hidden = !others.length;
+  for (const row of [$('average-head'), $('average-baseline-a').parentNode, $('average-record-a').parentNode]) {
+    row.querySelectorAll('.cmp').forEach(cell => cell.remove());
+  }
+  const columns = others.map(o => {
+    $('average-head').append(tint(make('th', {className: 'cmp cmp-fg', scope: 'col', title: o.name}, o.label), o.n));
+    const cells = [make('td', {className: 'cmp'}, '—'), make('td', {className: 'cmp'}, '—')];
+    $('average-baseline-a').parentNode.append(cells[0]);
+    $('average-record-a').parentNode.append(cells[1]);
+    return [cells, historicalAverage(o.values, o.index)];
+  });
   $('average-period').textContent = periodTitle() + ' baseline';
   $('average-reference').textContent = active.reference;
   const nasa = active.key === 'temperature';
@@ -665,12 +711,9 @@ function updateHistoricalAverages({series, index, other}) {
   $('average-baseline-note').hidden = !nasa && Boolean(active.baselineGrid);
 
   const a = historicalAverage(series, index);
-  const b = other && historicalAverage(other.values, other.index);
   const unit = active.climatology?.unit ?? active.unit;
-  for (const [id, average] of [['a', a], ['b', b]]) {
-    if (!average) continue;
-    setMetric($('average-baseline-' + id), average.baseline, unit, {showSign: false});
-    const record = $('average-record-' + id);
+  for (const [[baselineCell, record], average] of [[[$('average-baseline-a'), $('average-record-a')], a], ...columns]) {
+    setMetric(baselineCell, average.baseline, unit, {showSign: false});
     setMetric(record, average.anomaly, active.unit);
     if (average.count) {
       const coverage = document.createElement('small');
@@ -681,7 +724,7 @@ function updateHistoricalAverages({series, index, other}) {
   }
 }
 
-function updateLocationValues({central, index, future, other}, idx) {
+function updateLocationValues({central, index, future, other, others}, idx) {
   const trendMode = mode === 'trend';
   const date = labelForYear(year);
   const range = projectedNow ? future?.[idx - active.observed] : null;
@@ -698,28 +741,39 @@ function updateLocationValues({central, index, future, other}, idx) {
     $('value').append(error);
   }
   if (!other) return;
-  const secondary = trendMode ? grid[other.index] : other.values[idx];
-  $('compare-period').textContent = trendMode ? (year - WINDOW + 1) + '–' + year + ' trend per decade'
-    : date + (projectedNow ? ' projected anomaly' : ' anomaly');
-  setMetric($('other-value'), secondary, active.unit, options);
-  setMetric($('difference-value'), primary - secondary, active.unit, options);
+  $('compare-period').textContent = (trendMode ? (year - WINDOW + 1) + '–' + year + ' trend per decade'
+    : date + (projectedNow ? ' projected anomaly' : ' anomaly')) + ' · ' + active.unit;
+  const text = value => Number.isFinite(value) ? signed(value) : '—';
+  const row = (label, name, value, difference, n) => {
+    const tr = make('tr', {},
+      make('th', {scope: 'row'}, make('b', {className: n == null ? '' : 'cmp-fg'}, label), make('span', {title: name}, name)),
+      make('td', {}, text(value)), make('td', {}, difference));
+    return n == null ? tr : tint(tr, n);
+  };
+  $('compare-rows').replaceChildren(row('A', placeName, primary, ''),
+    ...others.map(o => {
+      const value = trendMode ? grid[o.index] : o.values[idx];
+      return row(o.label, o.name, value, text(value - primary), o.n);
+    }));
 }
 
-function updateComparisonTrend({index, other}, basis, rate) {
+function updateComparisonTrend({index, others}, basis, rate) {
   const output = $('compare-trend');
-  const secondary = other ? slopeAt(other.values, basis) * 10 : NaN;
-  output.hidden = !other || (index !== other.index && ![rate, secondary].every(Number.isFinite));
+  output.hidden = !others.length;
   if (output.hidden) return;
-  if (index === other.index) {
-    output.textContent = 'Both places are in the same grid cell.';
-    return;
-  }
+  const rates = [['A', rate], ...others.map(o => [o.label, slopeAt(o.values, basis) * 10])];
+  const finite = rates.filter(([, value]) => Number.isFinite(value)).sort((a, b) => b[1] - a[1]);
   const span = (active.years[basis] - WINDOW + 1) + '–' + active.years[basis];
-  const higher = rate > secondary ? 'A' : 'B';
-  const finding = signed(rate) === signed(secondary) ? 'The fitted rates round to the same value'
-    : rate > 0 && secondary > 0 && active.unit === '°C' ? higher + ' warmed faster'
-    : higher + ' had the higher fitted trend';
-  output.textContent = span + ' · ' + finding + ' (A ' + signed(rate) + ', B ' + signed(secondary) + ' ' + active.unit + '/decade).';
+  let text = span + ' trend per decade: ' +
+    rates.map(([label, value]) => label + ' ' + (Number.isFinite(value) ? signed(value) : 'no data')).join(', ') + ' ' + active.unit + '.';
+  if (finite.length > 1 && signed(finite[0][1]) !== signed(finite[1][1])) {
+    const most = finite.length > 2;
+    text += ' ' + finite[0][0] + (finite.every(([, value]) => value > 0) && active.unit === '°C'
+      ? ' warmed ' + (most ? 'fastest' : 'faster') : ' had the ' + (most ? 'highest' : 'higher') + ' fitted trend') + '.';
+  }
+  const same = others.filter(o => o.index === index).map(o => o.label);
+  if (same.length) text += ' ' + same.join(', ') + (same.length > 1 ? ' are' : ' is') + ' in the same grid cell as A.';
+  output.textContent = text;
 }
 
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
@@ -821,20 +875,21 @@ function paintSeries(g, values, start, end, x, y, color, weight) {
 // Paints the location chart into the rectangle (ox, oy, w, h). `k` scales
 // strokes and type so the same routine serves the panel and the PNG export.
 function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
-  const {series, central, idx, index, estimate, basis, future, other} = chartData;
+  const {series, central, idx, index, estimate, basis, future, other, others} = chartData;
   const c = chartColors(dark);
+  const otherFuture = others.some(o => o.future);
   const observedCount = active.observed;
-  const finite = series.concat(other?.values ?? []).filter(Number.isFinite);
+  const finite = series.concat(...others.map(o => o.values)).filter(Number.isFinite);
   const left = ox + 37 * k, right = ox + w - 7 * k, top = oy + 8 * k, bottom = oy + h - 20 * k;
   if (!finite.length) {
     g.font = 12 * k + 'px sans-serif'; g.fillStyle = c.text;
-    g.fillText(other ? 'No observations for either grid cell' : 'No observations for this grid cell', ox + 5 * k, oy + h / 2);
+    g.fillText(other ? 'No observations for any of these grid cells' : 'No observations for this grid cell', ox + 5 * k, oy + h / 2);
     return {left, right, bottom, top, x: () => left};
   }
   const [v0, v1] = viewRange();
   const lo = Math.floor(v0), hi = Math.ceil(v1);
   const inView = (value, i) => i >= lo && i <= hi && Number.isFinite(value);
-  const visible = series.filter(inView).concat((other?.values ?? []).filter(inView));
+  const visible = series.filter(inView).concat(...others.map(o => o.values.filter(inView)));
   const extremes = future ? future.flatMap((f, i) => inView(f.value, observedCount + i) ? [f.low, f.high] : []) : [];
   const shown = visible.length ? visible : finite;
   const min = Math.min(0, ...shown, ...extremes), max = Math.max(0, ...shown, ...extremes);
@@ -843,7 +898,7 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   const lastX = x(observedCount - 1);
   g.save();
   g.beginPath(); g.rect(left, oy, right - left, bottom - oy + 1); g.clip();
-  if (future || other?.future) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
+  if (future || otherFuture) { g.fillStyle = c.zone; g.fillRect(lastX, top, right - lastX, bottom - top); }
   if (interactive && intervalAnchor !== null) {
     const endpoint = intervalEnd ?? chartCursor ?? intervalAnchor;
     g.fillStyle = c.intervalFill;
@@ -864,11 +919,12 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     for (let i = future.length - 1; i >= 0; i--) g.lineTo(x(observedCount + i), y(future[i].low));
     g.closePath(); g.fillStyle = c.band; g.fill();
   }
-  if (other) {
-    paintSeries(g, other.values, 0, observedCount, x, y, c.other, (other.index === index ? 3.3 : 1.6) * k);
-    if (other.future) {
+  for (const o of others) {
+    const color = compareColor(o.n, dark);
+    paintSeries(g, o.values, 0, observedCount, x, y, color, (o.index === index ? 3.3 : 1.6) * k);
+    if (o.future) {
       g.setLineDash([5 * k, 3 * k]);
-      paintSeries(g, other.values, observedCount, series.length, x, y, c.other, 1.5 * k);
+      paintSeries(g, o.values, observedCount, series.length, x, y, color, 1.5 * k);
       g.setLineDash([]);
     }
   }
@@ -906,9 +962,10 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
     g.beginPath(); g.arc(x(idx), y(central[idx]), 3.5 * k, 0, Math.PI * 2);
     g.fillStyle = idx >= observedCount ? c.proj : c.dot; g.fill();
   }
-  if (Number.isFinite(other?.values[idx])) {
-    g.strokeStyle = c.other; g.lineWidth = 1.5 * k;
-    g.strokeRect(x(idx) - 3.5 * k, y(other.values[idx]) - 3.5 * k, 7 * k, 7 * k);
+  for (const o of others) {
+    if (!Number.isFinite(o.values[idx])) continue;
+    g.strokeStyle = compareColor(o.n, dark); g.lineWidth = 1.5 * k;
+    g.strokeRect(x(idx) - 3.5 * k, y(o.values[idx]) - 3.5 * k, 7 * k, 7 * k);
   }
   g.restore();
   g.font = 9 * k + 'px "IBM Plex Mono", monospace'; g.fillStyle = c.text; g.textAlign = 'left';
@@ -929,7 +986,7 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
   } else {
     g.fillText(active.years[0], left, axisY);
     g.textAlign = 'right'; g.fillText(active.years.at(-1), right, axisY);
-    if (future || other?.future) {
+    if (future || otherFuture) {
       g.textAlign = lastX > right - 60 * k ? 'right' : 'center';
       g.fillText(active.years[observedCount - 1], Math.min(lastX, right - 30 * k), axisY);
     }
@@ -939,13 +996,14 @@ function paintChart(g, ox, oy, w, h, {dark, k = 1, interactive = true} = {}) {
 }
 
 function chartPointLabel(index) {
-  const {central, future, other} = chartData;
+  const {central, future, others} = chartData;
   const label = labelForYear(active.years[index]) + (index >= active.observed ? ' (projected)' : '');
   const f = index >= active.observed ? future?.[index - active.observed] : null;
   const valueText = value => Number.isFinite(value) ? signed(value) + ' ' + active.unit : 'No data';
   const a = valueText(central[index]) +
     (f && f.high > f.low ? ' ± ' + ((f.high - f.low) / 2).toFixed(2) : '');
-  return other ? label + '\nA ' + a + '\nB ' + valueText(other.values[index]) : label + ' · ' + a;
+  return others.length ? label + '\nA ' + a + others.map(o => '\n' + o.label + ' ' + valueText(o.values[index])).join('')
+    : label + ' · ' + a;
 }
 
 function drawChart() {
@@ -956,7 +1014,7 @@ function drawChart() {
 
 function drawChartSurface(canvas, tooltip) {
   if (!active || !chartData) return;
-  const {series, central, idx, other} = chartData;
+  const {series, central, idx, others} = chartData;
   const g = canvas.getContext('2d');
   const [w, h] = sizeCanvas(canvas);
   if (!w || !h) return;
@@ -966,7 +1024,7 @@ function drawChartSurface(canvas, tooltip) {
   const label = chartPointLabel(inspected);
   $('chart-readout').textContent = label;
   tooltip.textContent = label;
-  const hasData = series.some(Number.isFinite) || other?.values.some(Number.isFinite);
+  const hasData = series.some(Number.isFinite) || others.some(o => o.values.some(Number.isFinite));
   tooltip.hidden = chartCursor == null || !hasData;
   const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark, k: w >= 480 ? 1.25 : 1});
   chartLayouts.set(canvas, {left, right});
@@ -991,9 +1049,10 @@ function drawChartSurface(canvas, tooltip) {
       g.beginPath(); g.arc(cursorX, y(central[inspected]), 4.5, 0, Math.PI * 2);
       g.fillStyle = inspected >= active.observed ? c.proj : c.cursor; g.fill();
     }
-    if (Number.isFinite(other?.values[inspected])) {
-      g.strokeStyle = c.other; g.lineWidth = 1.5;
-      g.strokeRect(cursorX - 4, y(other.values[inspected]) - 4, 8, 8);
+    for (const o of others) {
+      if (!Number.isFinite(o.values[inspected])) continue;
+      g.strokeStyle = compareColor(o.n, dark); g.lineWidth = 1.5;
+      g.strokeRect(cursorX - 4, y(o.values[inspected]) - 4, 8, 8);
     }
     g.restore();
     tooltip.style.left = clamp(cursorX > w / 2 ? cursorX - tooltip.offsetWidth - 8 : cursorX + 8,
@@ -1253,7 +1312,7 @@ let monthlyData, monthlyRequest, monthlyKey, monthlyDate, monthlyWindow, monthly
 let showMonthly = false, monthlyError = false, monthlyZoom = 1;
 const monthlySpans = [12, 24, 60];
 
-async function monthlyHistory(key, primaryIndex, otherIndex) {
+async function monthlyHistory(key, primaryIndex, otherIndexes) {
   const info = catalog[key];
   const size = info.width * info.height;
   const records = [];
@@ -1264,7 +1323,7 @@ async function monthlyHistory(key, primaryIndex, otherIndex) {
       records.push({
         date: year * 12 + Number(period) - 1,
         primary: grid[i * size + primaryIndex],
-        other: otherIndex == null ? NaN : grid[i * size + otherIndex],
+        others: otherIndexes.map(otherIndex => grid[i * size + otherIndex]),
       });
     }
   }
@@ -1275,14 +1334,14 @@ async function monthlyHistory(key, primaryIndex, otherIndex) {
 async function updateMonthlyDetail() {
   if (!showMonthly || !chartData || !active) return;
   const version = ++monthlyDetailVersion;
-  const {index, other} = chartData;
-  const key = [active.key, index, other?.index].join(':');
+  const {index, others} = chartData;
+  const key = [active.key, index, ...others.map(o => o.index)].join(':');
   if (key !== monthlyKey) {
     monthlyKey = key;
     monthlyData = null;
     monthlyError = false;
     drawMonthlyDetail();
-    monthlyRequest = monthlyHistory(active.key, index, other?.index);
+    monthlyRequest = monthlyHistory(active.key, index, others.map(o => o.index));
   }
   const detailDate = year * 12 + (mode === 'monthly' ? Number(periodKey()) - 1 : 11);
   try {
@@ -1317,8 +1376,8 @@ function monthlyRecords() {
 
 function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
   const a = records.map(record => record.primary);
-  const b = records.map(record => record.other);
-  const finite = a.concat(b).filter(Number.isFinite);
+  const rest = (records[0]?.others ?? []).map((_, n) => records.map(record => record.others[n]));
+  const finite = a.concat(...rest).filter(Number.isFinite);
   const min = Math.min(0, ...finite), max = Math.max(0, ...finite);
   const c = chartColors(dark);
   const left = 38 * k, right = w - 8 * k, top = 10 * k, bottom = h - 22 * k;
@@ -1333,7 +1392,7 @@ function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
     g.strokeStyle = tick === 0 ? c.zero : c.grid; g.lineWidth = k; g.stroke();
     g.fillText(signed(tick, 1), 0, ty + 3 * k);
   }
-  paintSeries(g, b, 0, b.length, x, y, c.other, 1.5 * k);
+  rest.forEach((b, n) => paintSeries(g, b, 0, b.length, x, y, compareColor(n, dark), 1.5 * k));
   paintSeries(g, a, 0, a.length, x, y, c.line, 1.5 * k);
   const ticks = Math.max(2, Math.floor((right - left) / (70 * k)));
   for (let j = 0; j < ticks; j++) {
@@ -1354,7 +1413,7 @@ function drawMonthlyDetail() {
   const ready = records.length > 0;
   $('chart-title').textContent = 'Monthly anomalies';
   $('chart').setAttribute('aria-label', 'Historical monthly anomalies for ' + placeName +
-    (comparison ? ' and ' + comparison.name : ''));
+    comparisons.map(place => ' and ' + place.name).join(''));
   $('zoom-in').disabled = !ready || monthlyZoom === 0;
   $('zoom-out').disabled = !ready || monthlyZoom === monthlySpans.length - 1;
   $('zoom-reset').disabled = !ready && !monthlyError;
@@ -1381,8 +1440,8 @@ function drawMonthlyDetail() {
   g.beginPath(); g.moveTo(px, layout.top); g.lineTo(px, layout.bottom);
   g.strokeStyle = layout.c.marker; g.lineWidth = 1; g.stroke();
   const metric = n => Number.isFinite(n) ? signed(n) + ' ' + active.unit : 'No data';
-  const label = monthlyLabel(record.date) + '\n' + (comparison ? 'A ' : '') + metric(record.primary) +
-    (comparison ? '\nB ' + metric(record.other) : '');
+  const label = monthlyLabel(record.date) + '\n' + (record.others.length ? 'A ' : '') + metric(record.primary) +
+    record.others.map((value, n) => '\n' + compareLabel(n) + ' ' + metric(value)).join('');
   $('chart-readout').textContent = label;
   tooltip.textContent = label;
   tooltip.hidden = false;
@@ -1871,7 +1930,7 @@ function locateCell(lon, lat) {
 function selectMapCell(location) {
   const name = locateCell(location[0], location[1]);
   if (choosingComparison) {
-    setComparison(name, location);
+    addComparison(name, location);
     return;
   }
   clearChartInterval();
@@ -2034,7 +2093,7 @@ function highlightPlace(index) {
 
 function goToPlace(place, asComparison = choosingComparison) {
   if (asComparison) {
-    setComparison(place.name, [place.lon, place.lat]);
+    addComparison(place.name, [place.lon, place.lat]);
     return;
   }
   if (choosingComparison) setChoosingComparison(false);
@@ -2054,8 +2113,8 @@ function setChoosingComparison(choosing) {
   closePlaceResults();
   const input = $('place-query');
   input.value = choosing ? '' : primaryQuery;
-  input.placeholder = choosing ? 'Search for the comparison place…' : 'Search a city or region…';
-  $('place-query-label').textContent = choosing ? 'Search for the comparison place' : 'Search cities and regions';
+  input.placeholder = choosing ? 'Search for a place to add…' : 'Search a city or region…';
+  $('place-query-label').textContent = choosing ? 'Search for a place to add' : 'Search cities and regions';
   $('compare').setAttribute('aria-pressed', choosing);
   $('compare-hint').hidden = !choosing;
   earth.setAttribute('aria-describedby', choosing ? 'compare-hint' : 'map-readout');
@@ -2066,24 +2125,42 @@ function setChoosingComparison(choosing) {
   }
 }
 
-function setComparison(name, location) {
-  comparison = location ? {name, point: location} : null;
-  const comparing = Boolean(comparison);
+function refreshComparisons(status) {
+  const comparing = comparisons.length > 0;
   setChoosingComparison(false);
-  $('compare').textContent = comparing ? 'Change comparison' : 'Compare';
-  $('compare-status').textContent = comparing ? 'Comparing ' + placeName + ' with ' + name + '.' : 'Comparison cleared.';
-  $('comparison-place').hidden = !comparing;
-  $('comparison-name').textContent = name;
-  for (const id of ['compare-clear', 'compare-period', 'other-metric', 'difference-metric', 'map-places']) $(id).hidden = !comparing;
-  $('slope-metric').hidden = comparing;
-  $('numbers').classList.toggle('with-comparison', comparing);
+  $('compare').textContent = comparing ? 'Add another place' : 'Compare';
+  $('compare-status').textContent = status;
+  $('comparison-list').replaceChildren(...comparisons.map((place, n) => tint(make('li', {},
+    make('i', {className: 'cmp-bg'}), make('b', {className: 'cmp-fg'}, compareLabel(n)), make('span', {title: place.name}, place.name),
+    Object.assign(make('button', {type: 'button', title: 'Remove ' + place.name}, '×'),
+      {ariaLabel: 'Remove ' + place.name, value: n})), n)));
+  for (const id of ['comparison-list', 'compare-clear', 'compare-period', 'compare-values', 'map-places']) $(id).hidden = !comparing;
+  $('numbers').hidden = comparing;
   updateInspector();
   queueDraw();
 }
 
+function addComparison(name, location) {
+  const index = cell(location).index;
+  if (comparisons.some(place => place.name === name && cell(place.point).index === index)) {
+    setChoosingComparison(false);
+    return;
+  }
+  comparisons.push({name, point: location});
+  refreshComparisons('Added ' + name + ' as ' + compareLabel(comparisons.length - 1) + '. Comparing ' + (comparisons.length + 1) + ' places.');
+}
+
 $('compare').addEventListener('click', () => setChoosingComparison(!choosingComparison));
 $('compare-clear').addEventListener('click', () => {
-  setComparison('', null);
+  comparisons = [];
+  refreshComparisons('Comparisons cleared.');
+  $('compare').focus();
+});
+$('comparison-list').addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  const [removed] = comparisons.splice(Number(button.value), 1);
+  refreshComparisons('Removed ' + removed.name + '.');
   $('compare').focus();
 });
 $('compare-map').addEventListener('click', event => {
@@ -2300,13 +2377,13 @@ $('chart-png').addEventListener('click', () => {
   g.fillStyle = c.text; g.font = '22px "IBM Plex Sans", sans-serif';
   g.fillText((showMonthly ? 'Monthly' : periodTitle()) + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
     coords(center).replace(' · ', ', ') + '.', pad, 116);
-  const {future, central, other} = chartData;
+  const {future, central, other, others} = chartData;
   const fit = chartFit(central);
   const legend = [[c.line, other ? 'A · ' + placeName : 'Measured', false]];
-  if (other) legend.push([c.other, 'B · ' + comparison.name, false]);
+  for (const o of others) legend.push([compareColor(o.n, dark), o.label + ' · ' + o.name, false]);
   if (fit && !showMonthly) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
   if (future && !showMonthly) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
-  if (other?.future && !showMonthly) legend.push([c.other, 'B projection', true]);
+  if (others.some(o => o.future) && !showMonthly) legend.push([c.text, others.length > 1 ? 'Comparison projections' : 'B projection', true]);
   let lx = pad;
   let ly = 160;
   g.font = '20px "IBM Plex Sans", sans-serif';
@@ -2333,7 +2410,8 @@ $('chart-png').addEventListener('click', () => {
 
 $('map-png').addEventListener('click', () => {
   if (!active || !rendered) return;
-  const head = 96, foot = comparison ? 102 : 54;
+  const shown = comparisons.slice(0, 8);
+  const head = 96, foot = comparisons.length ? 78 + 24 * (shown.length + (comparisons.length > shown.length)) : 54;
   const [canvas, g] = exportCanvas(earth.width, earth.height + head + foot, true);
   g.fillStyle = '#0b191d'; g.fillRect(0, 0, canvas.width, canvas.height);
   g.drawImage(earth, 0, head);
@@ -2343,10 +2421,15 @@ $('map-png').addEventListener('click', () => {
   const scale = mode === 'trend' ? active.trendScale : active.scale;
   g.fillText((mode === 'trend' ? 'Change per decade' : 'Anomaly relative to ' + active.reference) +
     '. Color scale −' + scale + ' to +' + scale + ' ' + active.unit + '.', 24, 74);
-  if (comparison) {
-    g.fillStyle = '#fffce8'; g.fillText('○ A  ' + placeName, 24, canvas.height - 68, canvas.width - 48);
-    g.fillStyle = '#8ee3ff'; g.fillText('◇ B  ' + comparison.name, 24, canvas.height - 44, canvas.width - 48);
+  if (comparisons.length) {
+    let ly = earth.height + head + 30;
+    g.fillStyle = '#fffce8'; g.fillText('○ A  ' + placeName, 24, ly, canvas.width - 48);
+    shown.forEach((place, n) => {
+      g.fillStyle = compareColor(n, true);
+      g.fillText('◇ ' + compareLabel(n) + '  ' + place.name, 24, ly += 24, canvas.width - 48);
+    });
     g.fillStyle = '#afbfb5';
+    if (comparisons.length > shown.length) g.fillText('+ ' + (comparisons.length - shown.length) + ' more places', 24, ly += 24);
   }
   g.fillText('Data: ' + active.agency + ', ' + active.product + '. GQ Atlas.', 24, canvas.height - 20);
   canvas.toBlob(blob => saveBlob(blob, [layer, mode, $('map-year').textContent.replace(/\s+/g, '-'), 'map'].join('-') + '.png'), 'image/png');

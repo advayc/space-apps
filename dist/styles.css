@@ -98,7 +98,6 @@ h1,h2,h3,p,figure{margin:0}
 .averages-table th[scope=row]{padding-left:0;text-align:left;font-weight:600}
 .averages-table tbody tr{border-top:1px solid var(--line)}
 .averages-table thead th{font:600 10px var(--mono);color:var(--muted)}
-.averages-table thead th:last-child,.averages-table td:nth-child(3){color:var(--compare)}
 .averages-table math{font-size:13px}
 .averages-table small,.averages-note{color:var(--muted);font-size:10px;line-height:1.35}
 .averages-table small{display:block;margin-top:2px;font-weight:400}
@@ -473,3 +472,41 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .impact-figure img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--card)}
 .impact-figure figcaption{margin-top:8px;font-size:13px;line-height:1.5;color:var(--muted)}
 .impact-figure .credit{display:block;margin-top:2px;font-size:11.5px}
+
+/* ---------- Comparing any number of places ---------- */
+.cmp-bg{background:var(--cl)}
+.cmp-fg{color:var(--cl)}
+.lg-cmp{border-color:var(--cl)}
+[data-theme=dark] .cmp-bg{background:var(--cd)}
+[data-theme=dark] .cmp-fg{color:var(--cd)}
+[data-theme=dark] .lg-cmp{border-color:var(--cd)}
+.lg-muted{border-color:var(--muted)}
+.cmp-map{color:var(--cd)}
+.numbers[hidden],.compare-values[hidden],.comparison-list[hidden]{display:none}
+.comparison-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:210px;overflow:auto}
+.comparison-list li{display:flex;align-items:center;gap:7px;padding:3px 3px 3px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px}
+.comparison-list li i{flex:none;width:9px;height:9px;border-radius:2px}
+.comparison-list li b{font:600 12px var(--mono)}
+.comparison-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comparison-list li button{flex:none;width:24px;height:24px;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:16px;line-height:1;cursor:pointer}
+.comparison-list li button:hover{background:var(--hover,#e8ece1);color:var(--ink)}
+.compare-values{width:100%;border-collapse:collapse;border-block:1px solid var(--line);font-size:13px}
+.compare-values thead th{padding:7px 0 3px;font:600 10px var(--mono);color:var(--muted);text-align:right}
+.compare-values thead th:first-child{text-align:left}
+.compare-values tbody tr{border-top:1px solid var(--line)}
+.compare-values tbody th{display:flex;align-items:baseline;gap:6px;padding:6px 0;text-align:left;font-weight:500;min-width:0}
+.compare-values tbody th b{font:600 12px var(--mono);flex:none}
+.compare-values tbody th span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:11ch}
+.compare-values td{padding:6px 0 6px 8px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.compare-values td:nth-child(2){font-weight:650;color:var(--accent)}
+.compare-values tr[style] td:nth-child(2){color:var(--cl)}
+[data-theme=dark] .compare-values tr[style] td:nth-child(2){color:var(--cd)}
+.compare-values td:last-child{color:var(--muted);font-size:12px}
+.chart-legend > span.legend-list:not([hidden]){display:contents}
+.legend-list > span{display:inline-flex;align-items:center;gap:5px}
+.averages-scroll{overflow-x:auto}
+.averages-table .cmp{padding-left:10px;white-space:nowrap}
+.averages-table:has(.cmp){width:max-content;min-width:100%}
+.averages-table:has(.cmp) th[scope=row]{min-width:7.5em;max-width:9em;padding-right:8px}
+.averages-table:has(.cmp) td{min-width:6.5em}
+.averages-table:has(.cmp) td small{white-space:nowrap}
