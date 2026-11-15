@@ -53,18 +53,21 @@
     <section>
       <h2>How It Works</h2>
       <ol class="steps-list">
-        <li><b>Take the last 30 years.</b> For the place and layer you picked, we use its 30 most recent measured years.</li>
-        <li><b>Fit a straight line.</b> Linear regression finds the line that sits closest to those 30 points. Its slope is the “trend per decade” shown in the atlas.</li>
-        <li><b>Continue the line to 2100.</b> The dashed violet line is that same line carried forward. The shaded area is where we expect 95% of future years to land, and it widens the further ahead you look.</li>
+        <li><b>Start with 30 years of data.</b> We use the 30 most recent measured years for your selected location and environmental layer.</li>
+        <li><b>Find the overall trend.</b> We apply linear regression to fit a straight line to the dataset, where the slope of the line shows the rate of change per decade.</li>
+        <li><b>Estimate future trends.</b> We extrapolate our data to 2100 based on current observed trends. The dashed violet line shows the projected trend, while the shaded area represents the range of possible future values. This range gets wider further into the future.</li>
       </ol>
-      <p>Two small adjustments keep it sensible. If a place’s trend is weak compared with its normal year-to-year swings, the line is flattened toward the recent average, so noise is not projected as change. And because real years never sit exactly on a line, the map shows one possible year with typical swings added.</p>
+      <p>Two adjustments help make the projections more realistic. </p>
+      <ol class="steps-list">
+        <li><b>1.</b> If the trend is weak compared with normal year-to-year variation, we pull the line closer to the recent average, rather than projecting inconclusive fluctuations as meaningful change.</li>
+        <li><b>2.</b> We also account for typical year-to-year variation, so the map shows one possible future year rather than assuming every year follows the straight line exactly.</li>
     </section>
 
     <section>
       <h2>Reliability</h2>
       <p>We tested the method on the past: start it in an earlier year, give it only the 30 years before, and compare its projection with what was later measured. Across every layer, 93–98% of the later measurements fell inside the shaded range, so the range is reliable.</p>
       <p>However, the projected line should be treated as a rough guide, not a precise prediction. When looking at temperature, the trend performed only slightly better than assuming no change, while for the other environmental variables, it offered no meaningful improvement.</p>
-      <p>As projections extend further into the future, uncertainty increases. Around 2050 and beyond, the range of possible outcomes becomes more informative than the projected line itself.</p>
+      <p>As projections extend further into the future, uncertainty increases. Therefore, at around 2050 and beyond, the range of possible outcomes becomes more informative than the projected line itself.</p>
       <p>By 2100, the uncertainty range is approximately <span id="proj-global-range">±0.9</span> °C for the global average and about ±3.6 °C for a typical single grid cell, implying that global trends are generally more stable than estimates for individual locations.</p>
     </section>
 
