@@ -31,11 +31,16 @@ Every layer's dataset page and original NetCDF file are linked under **Where thi
 - **Projected** values are a statistical estimate from past data with a stated error range, not a climate model forecast.
 - Cities jump to the **nearest coarse grid cell** (~2°), not a weather station.
 
-## NASA data
+## References
 
-- [GISTEMP v4, Land–Ocean Temperature Index](https://data.giss.nasa.gov/gistemp/data_v4.html) (NASA GISS). This is the surface temperature anomaly layer, on a 2° grid, compared with 1951–1980. Original file: [gistemp1200_GHCNv4_ERSSTv5.nc.gz](https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz).
-
-That is the only NASA dataset in the atlas. Precipitation, sea surface temperature, sea ice, and the reanalysis layers come from NOAA.
+[1] Hansen, J., Ruedy, R., Sato, M., & Lo, K. (2010). “Global surface temperature change.” Reviews of Geophysics, 48(4), RG4004. https://doi.org/10.1029/2010RG000345
+[2] Lenssen, N. J. L., Schmidt, G. A., Hansen, J. E., Menne, M. J., Persin, A., Ruedy, R., & Zyss, D. (2019). “Improvements in the GISTEMP uncertainty model.” Journal of Geophysical Research: Atmospheres, 124(12), 6307–6326. https://doi.org/10.1029/2018JD029522
+[3] Adler, R. F., Sapiano, M. R. P., Huffman, G. J., Wang, J., Gu, G., Bolvin, D., Chiu, L., Schneider, U., Becker, A., Nelkin, E., Xie, P., Ferraro, R., & Shin, D.-B. (2018). “The Global Precipitation Climatology Project (GPCP) monthly analysis (New Version 2.3) and a review of 2017 global precipitation.” Atmosphere, 9(4), 138. https://doi.org/10.3390/atmos9040138
+[4] Huang, B., Thorne, P. W., Banzon, V. F., Boyer, T., Chepurin, G., Lawrimore, J. H., Menne, M. J., Smith, T. M., Vose, R. S., & Zhang, H.-M. (2017). “Extended Reconstructed Sea Surface Temperature, Version 5 (ERSSTv5): Upgrades, validations, and intercomparisons.” Journal of Climate, 30(20), 8179–8205. https://doi.org/10.1175/JCLI-D-16-0836.1
+[5] Kalnay, E., Kanamitsu, M., Kistler, R., Collins, W., Deaven, D., Gandin, L., Iredell, M., Saha, S., White, G., Woollen, J., Zhu, Y., Chelliah, M., Ebisuzaki, W., Higgins, W., Janowiak, J., Mo, K. C., Ropelewski, C., Wang, J., Leetmaa, A., Reynolds, R., Jenne, R., & Joseph, D. (1996). “The NCEP/NCAR 40-year reanalysis project.” Bulletin of the American Meteorological Society, 77(3), 437–471. https://doi.org/10.1175/1520-0477(1996)077<0437:TNYRP>2.0.CO;2
+[6] Reynolds, R. W., Smith, T. M., Liu, C., Chelton, D. B., Casey, K. S., & Schlax, M. G. (2007). “Daily high-resolution-blended analyses for sea surface temperature.” Journal of Climate, 20(22), 5473–5496. https://doi.org/10.1175/2007JCLI1824.1
+[7] Newey, W. K., & West, K. D. (1987). “A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix.” Econometrica, 55(3), 703–708. https://doi.org/10.2307/1913610
+[8] Natural Earth. (n.d.). “Natural Earth terms of use.” https://www.naturalearthdata.com/about/terms-of-use/
 
 ## Data
 
