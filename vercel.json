@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "",
-  "buildCommand": "",
-  "outputDirectory": "dist",
+  "buildCommand": "node scripts/build-deployment.mjs",
+  "outputDirectory": "deployment-output",
   "headers": [
     {
       "source": "/assets/(.*)\\.bin",
