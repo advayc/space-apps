@@ -2122,7 +2122,7 @@ function normalizePlace(query) {
 
 function coordinatePlace(query) {
   const part = '([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*°?\\s*([NSEW]?)';
-  const match = query.trim().match(new RegExp('^' + part + '\\s*,\\s*' + part + '$', 'i'));
+  const match = query.trim().match(new RegExp('^\\(?\\s*' + part + '(?:\\s*,\\s*|\\s+)' + part + '\\s*\\)?$', 'i'));
   if (!match) return null;
   const latitude = Number(match[1]), longitude = Number(match[3]);
   const ns = match[2].toUpperCase(), ew = match[4].toUpperCase();
