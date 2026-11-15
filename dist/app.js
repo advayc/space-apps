@@ -1,4 +1,5 @@
 import { WINDOW, slopeAt, trend, forecast, extendGrid } from './statistics.js';
+import { implications } from './implications.js';
 import { months, seasons, dateLabel, makeTimeline, nearestIndex, futureYears } from './timeline.js';
 
 const $ = id => document.getElementById(id);
@@ -598,7 +599,7 @@ function updateInspector() {
   updateZoomControls();
   updateScatter();
   $('place-name').textContent = placeName;
-  $('coordinates').textContent = coords(center);
+  $('coordinates').textContent = coords(point);
   $('resolution').textContent = active.step + '° grid';
   updateLocationValues(chartData, idx);
   updateHistoricalAverages(chartData);
@@ -640,6 +641,7 @@ function updateInspector() {
   $('map-png').disabled = false;
   const hasTest = estimate?.p != null;
   const significant = hasTest && estimate.p < .05;
+  updateImplications(estimate, significant, basisYear);
   $('trend-details').hidden = !hasTest;
   $('trend-period').textContent = estimate ? (basisYear - WINDOW + 1) + '–' + basisYear : '';
   $('trend-status').textContent = hasTest ? (significant ? 'Significant at 5%' : 'Inconclusive at 5%') : 'Test unavailable';
@@ -2385,6 +2387,29 @@ function saveBlob(blob, name) {
   const link = document.createElement('a');
   link.href = url; link.download = name;
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// What a trend like this one generally leads to, shown beside the chart.
+function updateImplications(estimate, significant, basisYear) {
+  const [lon, lat] = cell(point).center;
+  const items = estimate && Number.isFinite(estimate.rate) && Math.abs(estimate.rate) > 1e-9
+    ? implications(layer, estimate.rate > 0, onLand(lon, lat)) : null;
+  $('implications').hidden = !items;
+  if (!items) return;
+  const rising = estimate.rate > 0, name = active.name.replace(/ anomaly$/, '');
+  const amount = value => Math.abs(value).toFixed(Math.abs(value) < .1 ? 2 : 1) + ' ' + active.unit;
+  // For the two wind components the sign is a direction, so "rising" would mislead.
+  const toward = {uwnd: ['from the east', 'from the west'], vwnd: ['from the north', 'from the south']}[layer];
+  $('implications-lead').textContent = toward
+    ? name + ' here is shifting toward winds ' + toward[+rising] + ', by ' + Math.abs(estimate.rate).toFixed(2) + ' ' + active.unit + ' per decade.'
+    : name + ' here is ' + (rising ? 'rising' : 'falling') + ' by ' + Math.abs(estimate.rate).toFixed(2) + ' ' + active.unit + ' per decade.';
+  const decades = (2050 - basisYear) / 10;
+  $('implications-ahead').hidden = decades <= 0 || Boolean(toward);
+  $('implications-ahead').textContent = 'If that continued, it would be about ' + amount(estimate.rate * decades) + ' ' +
+    (rising ? 'higher' : 'lower') + ' by 2050 than in ' + basisYear + '.';
+  $('implications-list').replaceChildren(...items.map(text => make('li', {}, text)));
+  $('implications-caveat').textContent = (significant ? '' : 'This trend is not statistically clear yet, so read these as what it would mean if it holds. ') +
+    'These are the general effects of this kind of change, not measurements for this grid cell.';
 }
 
 // ---------- Scatterplot: two variables at the same place, one point per year ----------
