@@ -562,7 +562,7 @@ function updateInspector() {
   $('resolution').textContent = active.step + '° grid';
   updateLocationValues(chartData, idx);
   updateHistoricalAverages(chartData);
-  setMetric($('slope'), estimate?.rate, active.unit);
+  setMetric($('slope'), estimate?.rate, active.unit, {stackUnit: active.unit.length > 3});
   $('chart').setAttribute('aria-label', periodTitle() + ' anomalies in ' + active.unit + ' for ' + placeName +
     (comparison ? ' and ' + comparison.name : '') +
     ', measured from ' + active.years[0] + ' to ' + active.years[active.observed - 1] +
@@ -681,7 +681,8 @@ function updateLocationValues({central, index, future, other}, idx) {
   const date = labelForYear(year);
   const range = projectedNow ? future?.[idx - active.observed] : null;
   const primary = other && trendMode ? grid[index] : central[idx];
-  const options = {stackUnit: Boolean(other) && active.unit.length > 3};
+  // The sidebar columns are narrow, so units longer than °C go on their own line.
+  const options = {stackUnit: active.unit.length > 3};
   $('value-label').textContent = other ? 'A This place' : date + (projectedNow ? ' projected anomaly' : ' anomaly');
   $('value').classList.toggle('is-projected', projectedNow);
   setMetric($('value'), primary, active.unit, options);
