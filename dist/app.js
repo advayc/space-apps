@@ -2184,7 +2184,7 @@ function renderPlaceResults(matches) {
     $('place-query').removeAttribute('aria-activedescendant');
     list.replaceChildren(Object.assign(document.createElement('li'), {
       className: 'place-empty',
-      textContent: 'No matching city. Try another name, or click the map.',
+      textContent: 'No matching place. Enter decimal latitude, longitude (e.g. 43.6532, -79.3832), or click the map.',
       role: 'presentation',
     }));
     list.hidden = false;
