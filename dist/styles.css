@@ -510,3 +510,19 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .averages-table:has(.cmp) th[scope=row]{min-width:7.5em;max-width:9em;padding-right:8px}
 .averages-table:has(.cmp) td{min-width:6.5em}
 .averages-table:has(.cmp) td small{white-space:nowrap}
+
+/* Sidebar: one column that never grows past the panel, so long place names wrap or truncate. */
+.inspector.place-panel{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.place-panel > *,.place-panel .location-values > *{min-width:0;max-width:100%}
+.place-panel .location h2{overflow-wrap:anywhere}
+.compare-values{table-layout:fixed}
+.compare-values th:first-child{width:auto}
+.compare-values thead th:nth-child(2),.compare-values thead th:nth-child(3){width:4.6em}
+.compare-values tbody th span{max-width:none;flex:1;min-width:0}
+#place-results{max-width:100%}
+#place-results button > *{min-width:0;overflow:hidden;text-overflow:ellipsis}
+#place-results button > :first-child{flex:1}
+#place-results button > :last-child{flex:none;max-width:45%;white-space:nowrap}
+.place-panel .chart-legend,.legend-list > span,.map-places span{min-width:0;overflow-wrap:anywhere}
+.place-field{position:relative}
+.place-search .compare-hint{margin:0 0 6px}
