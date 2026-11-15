@@ -196,9 +196,10 @@
           <output id="preview-zoom-range" class="zoom-range"></output>
         </div>
         <div class="chart-interactive">
-          <canvas id="chart-preview" tabindex="0" aria-label="Annual anomalies for the selected place" aria-describedby="chart-help"></canvas>
+          <canvas id="chart-preview" tabindex="0" aria-label="Annual anomalies for the selected place" aria-describedby="preview-help"></canvas>
           <div id="preview-tooltip" class="chart-tooltip" hidden></div>
         </div>
+        <p class="sr-only" id="preview-help">Use arrow keys to inspect, Enter to select endpoints, and plus and minus to zoom.</p>
         <div class="interval-header" id="preview-interval" hidden>
           <output id="preview-interval-summary"></output>
           <button id="preview-interval-clear" class="utility" type="button">Clear</button>
@@ -215,6 +216,10 @@
         <section class="analysis-chart" id="full-chart" tabindex="-1" aria-labelledby="chart-title">
           <div class="chart-header"><h3 id="chart-title">Annual anomalies</h3>
             <div class="chart-zoom" role="group" aria-label="Zoom the years">
+              <div class="segments" role="group" aria-label="Chart time scale">
+                <button id="chart-years" type="button" aria-pressed="true">Years</button>
+                <button id="chart-months" type="button" aria-pressed="false">Monthly</button>
+              </div>
               <output id="zoom-range" class="zoom-range" aria-live="polite"></output>
               <button id="zoom-out" class="utility" type="button" aria-label="Zoom out" disabled>−</button>
               <button id="zoom-in" class="utility" type="button" aria-label="Zoom in">+</button>
@@ -229,10 +234,10 @@
           <p class="chart-legend">
             <span><i class="lg lg-obs" aria-hidden="true"></i><span id="chart-primary-legend">Measured</span></span>
             <span id="chart-compare-legend" hidden><i class="lg lg-compare" aria-hidden="true"></i>B record</span>
-            <span><i class="lg lg-fit" aria-hidden="true"></i><span id="chart-fit-legend">Trend line</span></span>
-            <span id="chart-projection-legend"><i class="lg lg-proj" aria-hidden="true"></i><span id="chart-projection-text">Projection, with 95% range</span></span>
-            <span id="chart-path-legend"><i class="lg lg-sim" aria-hidden="true"></i><span id="chart-path-text">One possible path</span></span>
-            <span id="chart-compare-projection" hidden><i class="lg lg-compare lg-dash" aria-hidden="true"></i>B projection</span>
+            <span class="year-legend"><i class="lg lg-fit" aria-hidden="true"></i><span id="chart-fit-legend">Trend line</span></span>
+            <span class="year-legend" id="chart-projection-legend"><i class="lg lg-proj" aria-hidden="true"></i><span id="chart-projection-text">Projection, with 95% range</span></span>
+            <span class="year-legend" id="chart-path-legend"><i class="lg lg-sim" aria-hidden="true"></i><span id="chart-path-text">One possible path</span></span>
+            <span class="year-legend" id="chart-compare-projection" hidden><i class="lg lg-compare lg-dash" aria-hidden="true"></i>B projection</span>
           </p>
           <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
           <span id="chart-announcement" class="sr-only" role="status"></span>
@@ -247,23 +252,6 @@
               <div><dt>Change</dt><dd id="interval-change"></dd></div>
             </dl>
           </div>
-          <details class="monthly-detail" id="monthly-detail">
-            <summary>Monthly detail</summary>
-            <div class="monthly-controls">
-              <label>Zoom <select id="monthly-span">
-                <option value="12">12 months</option>
-                <option value="24" selected>24 months</option>
-                <option value="60">60 months</option>
-              </select></label>
-              <button class="utility" id="monthly-earlier" type="button" aria-label="One year earlier">‹</button>
-              <button class="utility" id="monthly-later" type="button" aria-label="One year later">›</button>
-            </div>
-            <p id="monthly-status" role="status">Historical monthly anomalies</p>
-            <canvas id="monthly-chart" role="img" aria-label="Historical anomalies for consecutive months"></canvas>
-            <label class="sr-only" for="monthly-cursor">Inspect a month</label>
-            <input id="monthly-cursor" type="range">
-            <output id="monthly-readout" for="monthly-cursor"></output>
-          </details>
         </section>
         <div class="analysis-context">
           <section class="result" id="result" aria-labelledby="trend-title">

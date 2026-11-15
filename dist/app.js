@@ -204,7 +204,8 @@ async function selectDate(index, {scrub = false} = {}) {
   chartData = chartCursor = chartView = null;
   chartLayouts.clear();
   monthlyDetailVersion++;
-  if ($('monthly-detail').open) $('monthly-status').textContent = 'Loading monthly values…';
+  monthlyWindow = null;
+  if (showMonthly) drawMonthlyDetail();
   clearChartInterval();
   updateZoomControls();
   $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
@@ -341,8 +342,8 @@ function update(fade = 0, {scrub = false} = {}) {
   $('map-year').textContent = mode === 'trend' ? (year - WINDOW + 1) + '–' + year : labelForYear(year);
   $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND'
     : (projectedNow ? 'PROJECTED ' : '') + mode.toUpperCase() + ' ANOMALY';
-  $('chart-title').textContent = periodTitle() + ' anomalies';
-  $('chart-preview-title').textContent = $('chart-title').textContent;
+  $('chart-preview-title').textContent = periodTitle() + ' anomalies';
+  $('chart-title').textContent = showMonthly ? 'Monthly anomalies' : $('chart-preview-title').textContent;
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
@@ -948,7 +949,8 @@ function chartPointLabel(index) {
 }
 
 function drawChart() {
-  drawChartSurface(chart, $('chart-tooltip'));
+  if (showMonthly) drawMonthlyDetail();
+  else drawChartSurface(chart, $('chart-tooltip'));
   drawChartSurface($('chart-preview'), $('preview-tooltip'));
 }
 
@@ -1056,7 +1058,7 @@ function panChart(deltaIndex) {
 function updateZoomControls() {
   const last = (active?.years.length ?? 2) - 1;
   const [v0, v1] = viewRange();
-  for (const prefix of ['', 'preview-']) {
+  for (const prefix of showMonthly ? ['preview-'] : ['', 'preview-']) {
     $(prefix + 'zoom-in').disabled = !active || v1 - v0 <= Math.min(MIN_CHART_SPAN, last) + 1e-6;
     $(prefix + 'zoom-out').disabled = $(prefix + 'zoom-reset').disabled = !chartView;
     $(prefix + 'zoom-range').textContent = chartView && active
@@ -1125,10 +1127,12 @@ $('preview-interval-clear').addEventListener('click', () => {
   drawChart();
 });
 function bindChart(canvas, prefix = '') {
+  const monthly = () => canvas === chart && showMonthly;
   // Drag sideways to pan a zoomed chart; pinch with two fingers to zoom.
   const chartPointers = new Map();
   let chartGesture = null, chartDragged = false;
   canvas.addEventListener('pointerdown', event => {
+    if (monthly()) return;
     const chartLayout = chartLayouts.get(canvas);
     if (!chartLayout || !active) return;
     chartPointers.set(event.pointerId, event.clientX);
@@ -1142,6 +1146,7 @@ function bindChart(canvas, prefix = '') {
     }
   });
   canvas.addEventListener('pointermove', event => {
+    if (monthly()) return;
     const chartLayout = chartLayouts.get(canvas);
     if (chartPointers.has(event.pointerId) && chartGesture && chartLayout) {
       chartPointers.set(event.pointerId, event.clientX);
@@ -1173,6 +1178,7 @@ function bindChart(canvas, prefix = '') {
   canvas.addEventListener('pointerup', endChartPointer);
   canvas.addEventListener('pointercancel', endChartPointer);
   canvas.addEventListener('wheel', event => {
+    if (monthly()) return;
     const chartLayout = chartLayouts.get(canvas);
     if (!chartLayout || !active) return;
     const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
@@ -1188,21 +1194,24 @@ function bindChart(canvas, prefix = '') {
     }
   }, {passive: false});
   canvas.addEventListener('dblclick', event => {
+    if (monthly()) return;
     event.preventDefault();
     if (chartView) setChartView(0, Infinity);
   });
-  $(prefix + 'zoom-in').addEventListener('click', () => zoomChart(.6));
-  $(prefix + 'zoom-out').addEventListener('click', () => zoomChart(1 / .6));
-  $(prefix + 'zoom-reset').addEventListener('click', () => setChartView(0, Infinity));
-  canvas.addEventListener('pointerleave', () => inspectChart(null));
-  canvas.addEventListener('blur', () => inspectChart(null));
+  $(prefix + 'zoom-in').addEventListener('click', () => monthly() ? zoomMonthly(-1) : zoomChart(.6));
+  $(prefix + 'zoom-out').addEventListener('click', () => monthly() ? zoomMonthly(1) : zoomChart(1 / .6));
+  $(prefix + 'zoom-reset').addEventListener('click', () => monthly() ? resetMonthly() : setChartView(0, Infinity));
+  canvas.addEventListener('pointerleave', () => { if (!monthly()) inspectChart(null); });
+  canvas.addEventListener('blur', () => { if (!monthly()) inspectChart(null); });
   canvas.addEventListener('click', event => {
+    if (monthly()) return;
     if (chartDragged) { chartDragged = false; return; }
     const index = chartIndexAt(canvas, event);
     inspectChart(index);
     selectChartPoint(index);
   });
   canvas.addEventListener('keydown', event => {
+    if (monthly()) return;
     if (!active) return;
     const index = chartCursor ?? yearIndex();
     const next = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: active.years.length - 1};
@@ -1240,7 +1249,9 @@ bindChart($('chart-preview'), 'preview-');
 
 
 let monthlyDetailVersion = 0;
-let monthlyData, monthlyRequest, monthlyKey, monthlyDate;
+let monthlyData, monthlyRequest, monthlyKey, monthlyDate, monthlyWindow, monthlyCursor, monthlyDrag;
+let showMonthly = false, monthlyError = false, monthlyZoom = 1;
+const monthlySpans = [12, 24, 60];
 
 async function monthlyHistory(key, primaryIndex, otherIndex) {
   const info = catalog[key];
@@ -1262,28 +1273,32 @@ async function monthlyHistory(key, primaryIndex, otherIndex) {
 }
 
 async function updateMonthlyDetail() {
-  if (!$('monthly-detail').open || !chartData || !active) return;
+  if (!showMonthly || !chartData || !active) return;
   const version = ++monthlyDetailVersion;
   const {index, other} = chartData;
   const key = [active.key, index, other?.index].join(':');
   if (key !== monthlyKey) {
     monthlyKey = key;
     monthlyData = null;
+    monthlyError = false;
     drawMonthlyDetail();
-    $('monthly-status').textContent = 'Loading monthly values…';
     monthlyRequest = monthlyHistory(active.key, index, other?.index);
   }
   const detailDate = year * 12 + (mode === 'monthly' ? Number(periodKey()) - 1 : 11);
   try {
     const records = await monthlyRequest;
     if (version !== monthlyDetailVersion) return;
-    if (monthlyData?.timelineDate !== detailDate) monthlyDate = detailDate;
+    if (monthlyData?.timelineDate !== detailDate) {
+      monthlyDate = detailDate;
+      monthlyCursor = null;
+    }
     monthlyData = {records, timelineDate: detailDate};
     drawMonthlyDetail();
   } catch {
     if (version !== monthlyDetailVersion) return;
     monthlyKey = null;
-    $('monthly-status').textContent = 'Monthly values could not load. Reopen Monthly detail to retry.';
+    monthlyError = true;
+    drawMonthlyDetail();
   }
 }
 
@@ -1291,73 +1306,170 @@ function monthlyLabel(index) {
   return dateLabel(Math.floor(index / 12), String(index % 12 + 1).padStart(2, '0'));
 }
 
-function drawMonthlyDetail() {
-  if (!$('monthly-detail').open) return;
-  const canvas = $('monthly-chart');
-  const [w, h] = sizeCanvas(canvas);
-  const g = canvas.getContext('2d');
-  g.clearRect(0, 0, w, h);
-  const cursor = $('monthly-cursor');
-  const earlier = $('monthly-earlier'), later = $('monthly-later');
-  cursor.disabled = earlier.disabled = later.disabled = !monthlyData || !active;
-  if (!monthlyData || !active) {
-    $('monthly-readout').textContent = '';
-    return;
-  }
+function monthlyRecords() {
+  if (!monthlyData || !active) return [];
   const {records} = monthlyData;
-  const span = Number($('monthly-span').value);
+  const span = monthlySpans[monthlyZoom];
   const first = records[0].date, last = records.at(-1).date;
-  const end = clamp(monthlyDate, Math.min(first + span - 1, last), last);
-  const start = Math.max(first, end - span + 1);
-  monthlyDate = end;
-  earlier.disabled = start === first;
-  later.disabled = end === last;
-  const values = records.filter(record => record.date >= start && record.date <= end);
-  const a = values.map(record => record.primary), b = values.map(record => record.other);
+  monthlyDate = clamp(monthlyDate, Math.min(first + span - 1, last), last);
+  return records.filter(record => record.date > monthlyDate - span && record.date <= monthlyDate);
+}
+
+function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
+  const a = records.map(record => record.primary);
+  const b = records.map(record => record.other);
   const finite = a.concat(b).filter(Number.isFinite);
   const min = Math.min(0, ...finite), max = Math.max(0, ...finite);
-  const c = chartColors(document.documentElement.dataset.theme === 'dark');
-  const left = 38, right = w - 8, bottom = h - 22;
-  const x = i => left + i / Math.max(1, values.length - 1) * (right - left);
-  const y = v => max === min ? bottom / 2 : bottom - (v - min) / (max - min) * (bottom - 10);
-  g.font = '10px "IBM Plex Mono", monospace';
+  const c = chartColors(dark);
+  const left = 38 * k, right = w - 8 * k, top = 10 * k, bottom = h - 22 * k;
+  const x = i => left + i / Math.max(1, records.length - 1) * (right - left);
+  const y = v => max === min ? (top + bottom) / 2 : bottom - (v - min) / (max - min) * (bottom - top);
+  g.font = 10 * k + 'px "IBM Plex Mono", monospace';
   g.fillStyle = c.text;
+  g.textAlign = 'left';
   for (const tick of new Set([min, 0, max])) {
     const ty = y(tick);
     g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
-    g.strokeStyle = c.grid; g.lineWidth = 1; g.stroke();
-    g.fillText(signed(tick, 1), 0, ty + 3);
+    g.strokeStyle = tick === 0 ? c.zero : c.grid; g.lineWidth = k; g.stroke();
+    g.fillText(signed(tick, 1), 0, ty + 3 * k);
   }
-  paintSeries(g, b, 0, b.length, x, y, c.other, 1.5);
-  paintSeries(g, a, 0, a.length, x, y, c.line, 1.5);
-  g.fillText(monthlyLabel(start), left, h - 4);
-  g.textAlign = 'right'; g.fillText(monthlyLabel(end), right, h - 4); g.textAlign = 'left';
-  $('monthly-status').textContent = finite.length ? 'Historical monthly anomalies · ' + active.unit : 'No monthly observations in this window.';
-  Object.assign(cursor, {min: 0, max: values.length - 1, value: Math.min(Number(cursor.value), values.length - 1)});
-  const i = Number(cursor.value), px = x(i);
-  g.beginPath(); g.moveTo(px, 10); g.lineTo(px, bottom); g.strokeStyle = c.marker; g.stroke();
-  const label = monthlyLabel(values[i].date);
-  const metric = n => Number.isFinite(n) ? signed(n) + ' ' + active.unit : 'No data';
-  cursor.setAttribute('aria-valuetext', label);
-  $('monthly-readout').textContent = label + ' · ' + (comparison ? 'A ' : '') + metric(a[i]) + (comparison ? ' · B ' + metric(b[i]) : '');
+  paintSeries(g, b, 0, b.length, x, y, c.other, 1.5 * k);
+  paintSeries(g, a, 0, a.length, x, y, c.line, 1.5 * k);
+  const ticks = Math.max(2, Math.floor((right - left) / (70 * k)));
+  for (let j = 0; j < ticks; j++) {
+    const i = Math.round(j * (records.length - 1) / (ticks - 1));
+    g.textAlign = j === 0 ? 'left' : j === ticks - 1 ? 'right' : 'center';
+    g.fillText(monthlyLabel(records[i].date), x(i), h - 4 * k);
+  }
+  return {left, right, top, bottom, x, y, c, hasData: finite.length > 0};
 }
 
-$('monthly-detail').addEventListener('toggle', updateMonthlyDetail);
-$('monthly-span').addEventListener('change', drawMonthlyDetail);
-$('monthly-cursor').addEventListener('input', drawMonthlyDetail);
-$('monthly-earlier').addEventListener('click', () => { monthlyDate -= 12; drawMonthlyDetail(); });
-$('monthly-later').addEventListener('click', () => { monthlyDate += 12; drawMonthlyDetail(); });
-$('monthly-chart').addEventListener('pointermove', event => {
-  if (!monthlyData || !active) return;
-  const rect = event.currentTarget.getBoundingClientRect();
-  const cursor = $('monthly-cursor');
-  const fraction = clamp((event.clientX - rect.left - 38) / (rect.width - 46), 0, 1);
-  const i = Math.round(fraction * Number(cursor.max));
-  if (i === Number(cursor.value)) return;
-  cursor.value = i;
+function drawMonthlyDetail() {
+  if (!showMonthly) return;
+  const [w, h] = sizeCanvas(chart);
+  if (!w || !h) return;
+  const g = chart.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const records = monthlyRecords();
+  const ready = records.length > 0;
+  $('chart-title').textContent = 'Monthly anomalies';
+  $('chart').setAttribute('aria-label', 'Historical monthly anomalies for ' + placeName +
+    (comparison ? ' and ' + comparison.name : ''));
+  $('zoom-in').disabled = !ready || monthlyZoom === 0;
+  $('zoom-out').disabled = !ready || monthlyZoom === monthlySpans.length - 1;
+  $('zoom-reset').disabled = !ready && !monthlyError;
+  $('zoom-reset').textContent = monthlyError ? 'Retry' : 'Reset';
+  $('zoom-range').textContent = ready ? records.length + ' months' : '';
+  const tooltip = $('chart-tooltip');
+  tooltip.hidden = true;
+  monthlyWindow = null;
+  $('chart-png').disabled = true;
+  if (!ready) {
+    $('chart-help').textContent = monthlyError ? 'Monthly data could not load. Choose Retry.' : 'Loading monthly observations…';
+    return;
+  }
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const layout = paintMonthlyPlot(g, w, h, records, dark);
+  $('chart-png').disabled = !layout.hasData;
+  monthlyWindow = {records, ...layout};
+  $('chart-help').textContent = layout.hasData
+    ? 'Historical observations. Use + and − to zoom from 12 to 60 months. Drag to browse, or use the arrow keys to inspect a month.'
+    : 'No observations in this window. Drag or zoom out to browse other months.';
+  const i = records.findIndex(record => record.date === monthlyCursor);
+  if (i < 0) return;
+  const record = records[i], px = layout.x(i);
+  g.beginPath(); g.moveTo(px, layout.top); g.lineTo(px, layout.bottom);
+  g.strokeStyle = layout.c.marker; g.lineWidth = 1; g.stroke();
+  const metric = n => Number.isFinite(n) ? signed(n) + ' ' + active.unit : 'No data';
+  const label = monthlyLabel(record.date) + '\n' + (comparison ? 'A ' : '') + metric(record.primary) +
+    (comparison ? '\nB ' + metric(record.other) : '');
+  $('chart-readout').textContent = label;
+  tooltip.textContent = label;
+  tooltip.hidden = false;
+  tooltip.style.left = clamp(px < w / 2 ? px + 8 : px - tooltip.offsetWidth - 8, 0, w - tooltip.offsetWidth) + 'px';
+  tooltip.style.top = Math.max(0, layout.bottom - tooltip.offsetHeight - 4) + 'px';
+}
+
+function setMonthlyMode(next) {
+  showMonthly = next;
+  monthlyDetailVersion++;
+  monthlyCursor = monthlyDrag = null;
+  $('full-chart').classList.toggle('showing-months', next);
+  $('chart-years').setAttribute('aria-pressed', !next);
+  $('chart-months').setAttribute('aria-pressed', next);
+  if (next) updateMonthlyDetail();
+  else {
+    $('zoom-reset').textContent = 'All years';
+    if (active) update();
+    else updateZoomControls();
+  }
+}
+
+function zoomMonthly(direction) {
+  monthlyZoom = clamp(monthlyZoom + direction, 0, monthlySpans.length - 1);
+  drawMonthlyDetail();
+}
+
+function resetMonthly() {
+  if (monthlyError) { updateMonthlyDetail(); return; }
+  if (!monthlyData) return;
+  monthlyDate = monthlyData.timelineDate;
+  monthlyZoom = 1;
+  monthlyCursor = null;
+  drawMonthlyDetail();
+}
+
+$('chart-years').addEventListener('click', () => setMonthlyMode(false));
+$('chart-months').addEventListener('click', () => setMonthlyMode(true));
+chart.addEventListener('pointerdown', event => {
+  if (!showMonthly || !monthlyWindow || event.button !== 0) return;
+  chart.setPointerCapture(event.pointerId);
+  monthlyDrag = {x: event.clientX, end: monthlyDate};
+});
+chart.addEventListener('pointermove', event => {
+  if (!showMonthly || !monthlyWindow) return;
+  const {left, right, records} = monthlyWindow;
+  if (monthlyDrag) {
+    monthlyDate = monthlyDrag.end - Math.round((event.clientX - monthlyDrag.x) / (right - left) * (records.length - 1));
+    monthlyCursor = null;
+  } else {
+    const x = event.clientX - chart.getBoundingClientRect().left;
+    const i = Math.round(clamp((x - left) / (right - left), 0, 1) * (records.length - 1));
+    if (monthlyCursor === records[i].date) return;
+    monthlyCursor = records[i].date;
+  }
   drawMonthlyDetail();
 });
-new ResizeObserver(drawMonthlyDetail).observe($('monthly-chart'));
+chart.addEventListener('lostpointercapture', () => { monthlyDrag = null; });
+for (const event of ['pointerleave', 'blur']) {
+  chart.addEventListener(event, () => {
+    if (!showMonthly) return;
+    monthlyCursor = null;
+    drawMonthlyDetail();
+  });
+}
+chart.addEventListener('wheel', event => {
+  if (!showMonthly || !monthlyWindow || !(event.ctrlKey || event.metaKey)) return;
+  event.preventDefault();
+  zoomMonthly(Math.sign(event.deltaY));
+}, {passive: false});
+chart.addEventListener('keydown', event => {
+  if (!showMonthly || !monthlyWindow) return;
+  if (event.key === '+' || event.key === '=') zoomMonthly(-1);
+  else if (event.key === '-') zoomMonthly(1);
+  else if (event.key === '0') resetMonthly();
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    const {records} = monthlyWindow;
+    const offset = event.key === 'ArrowLeft' ? -1 : 1;
+    const first = monthlyData.records[0].date, last = monthlyData.records.at(-1).date;
+    monthlyCursor = clamp((monthlyCursor ?? records.at(-1).date) + offset, first, last);
+    if (monthlyCursor < records[0].date) monthlyDate += offset;
+    if (monthlyCursor > records.at(-1).date) monthlyDate += offset;
+    drawMonthlyDetail();
+    $('chart-announcement').textContent = $('chart-readout').textContent;
+  } else return;
+  event.preventDefault();
+});
 
 let playbackRun = 0;
 
@@ -2186,15 +2298,15 @@ $('chart-png').addEventListener('click', () => {
   g.fillStyle = ink; g.font = '600 38px "Bricolage Grotesque", "IBM Plex Sans", sans-serif';
   g.fillText(placeName + ': ' + active.name.toLowerCase(), pad, 78);
   g.fillStyle = c.text; g.font = '22px "IBM Plex Sans", sans-serif';
-  g.fillText(periodTitle() + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
+  g.fillText((showMonthly ? 'Monthly' : periodTitle()) + ' anomaly in ' + active.unit + ', relative to ' + active.reference + '. Grid cell centered at ' +
     coords(center).replace(' · ', ', ') + '.', pad, 116);
   const {future, central, other} = chartData;
   const fit = chartFit(central);
   const legend = [[c.line, other ? 'A · ' + placeName : 'Measured', false]];
   if (other) legend.push([c.other, 'B · ' + comparison.name, false]);
-  if (fit) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
-  if (future) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
-  if (other?.future) legend.push([c.other, 'B projection', true]);
+  if (fit && !showMonthly) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
+  if (future && !showMonthly) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
+  if (other?.future && !showMonthly) legend.push([c.other, 'B projection', true]);
   let lx = pad;
   let ly = 160;
   g.font = '20px "IBM Plex Sans", sans-serif';
@@ -2207,7 +2319,12 @@ $('chart-png').addEventListener('click', () => {
     lx += length + 40;
   }
   const chartTop = ly + 30;
-  paintChart(g, pad, chartTop, W - 2 * pad, H - chartTop - 86, {dark, k, interactive: false});
+  if (showMonthly && monthlyWindow) {
+    g.save();
+    g.translate(pad, chartTop);
+    paintMonthlyPlot(g, W - 2 * pad, H - chartTop - 86, monthlyWindow.records, dark, k);
+    g.restore();
+  } else paintChart(g, pad, chartTop, W - 2 * pad, H - chartTop - 86, {dark, k, interactive: false});
   g.fillStyle = c.text; g.font = '18px "IBM Plex Sans", sans-serif';
   g.fillText('Data: ' + active.agency + ', ' + active.product + '. ' + active.source, pad, H - 34);
   g.textAlign = 'right'; g.fillText('GQ Atlas', W - pad, H - 34);
