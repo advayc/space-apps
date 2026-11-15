@@ -1964,7 +1964,10 @@ function cityWeight(city) {
   return pop;
 }
 
-function nearestCityPhrase(lon, lat) {
+// Returns the phrase for the nearest notable city and the city itself. A city in the
+// clicked country (and province) wins over a bigger one just across a border.
+function nearestCity(lon, lat, country = '', province = '') {
+  const local = city => (country && city.country === country ? 6 : 1) * (province && city.region === province ? 3 : 1);
   let closest = null;
   let closestKm = Infinity;
   for (const city of majorCities) {
@@ -1974,16 +1977,16 @@ function nearestCityPhrase(lon, lat) {
       closest = city;
     }
   }
-  if (!closest) return '';
+  if (!closest) return null;
   // Among cities almost as close, prefer a capital, then a larger city.
   const windowKm = Math.max(closestKm * 1.35, closestKm + 40);
   let chosen = closest;
   let chosenKm = closestKm;
-  let best = cityWeight(closest) / (closestKm + 25);
+  let best = local(closest) * cityWeight(closest) / (closestKm + 25);
   for (const city of majorCities) {
     const km = kmBetween(lon, lat, city.lon, city.lat);
     if (km > windowKm) continue;
-    const score = cityWeight(city) / (km + 25);
+    const score = local(city) * cityWeight(city) / (km + 25);
     if (score > best) {
       best = score;
       chosen = city;
@@ -1991,11 +1994,17 @@ function nearestCityPhrase(lon, lat) {
     }
   }
   const km = Math.round(chosenKm);
-  return km < 45 ? chosen.name : km + ' km ' + compassFrom(lon, lat, chosen) + ' of ' + chosen.name;
+  // Across a border the click is not "in" that city, so give the distance instead.
+  const elsewhere = (country && chosen.country !== country) || (province && chosen.region !== province);
+  return {city: chosen, phrase: km < (elsewhere ? 8 : 45) ? chosen.name : km + ' km ' + compassFrom(lon, lat, chosen) + ' of ' + chosen.name};
+}
+
+function nearestCityPhrase(lon, lat) {
+  return nearestCity(lon, lat)?.phrase ?? '';
 }
 
 // Name a clicked cell by the nearest major city, plus the province and country
-// the point actually falls in. Open water, Antarctica, and the poles are named
+// that city is in, so the two always agree. Open water, Antarctica, and the poles are named
 // as those places first.
 function locateCell(lon, lat) {
   if (lat >= 85) return 'North Pole · Arctic Ocean';
@@ -2014,9 +2023,10 @@ function locateCell(lon, lat) {
   const province = featureHits(provinces, lon, lat)?.properties;
   const regionName = province && province.admin === country ? province.name : '';
   const region = [regionName, country].filter(Boolean).join(', ');
-  const near = nearestCityPhrase(lon, lat);
+  const near = nearestCity(lon, lat, country, regionName);
   if (!near) return region || 'Land';
-  return region ? near + ' · ' + region : near;
+  const cityRegion = [near.city.region, near.city.country].filter(Boolean).join(', ');
+  return near.phrase + ' · ' + (cityRegion || region);
 }
 
 function selectMapCell(location) {
