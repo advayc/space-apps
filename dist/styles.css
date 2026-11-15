@@ -513,6 +513,7 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 
 /* Sidebar: one column that never grows past the panel, so long place names wrap or truncate. */
 .inspector.place-panel{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.place-panel:focus-within{position:relative;z-index:6}
 .place-panel > *,.place-panel .location-values > *{min-width:0;max-width:100%}
 .place-panel .location h2{overflow-wrap:anywhere}
 .compare-values{table-layout:fixed}

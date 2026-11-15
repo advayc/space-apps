@@ -2193,7 +2193,11 @@ function renderPlaceResults(matches) {
     button.innerHTML = '<span class="place-name"></span><span class="place-region"></span>';
     button.querySelector('.place-name').textContent = place.name;
     button.querySelector('.place-region').textContent = place.region || '';
-    button.addEventListener('mousedown', event => event.preventDefault());
+    // Keep focus on the combobox while choosing with a mouse or pen. Touch
+    // retains its default behavior so the suggestion list can still scroll.
+    button.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'touch') event.preventDefault();
+    });
     button.addEventListener('click', () => goToPlace(place));
     item.append(button);
     return item;
@@ -2312,6 +2316,7 @@ $('place-query').addEventListener('keydown', event => {
       goToPlace(placeMatches[placeActive]);
     }
   } else if (event.key === 'Escape') {
+    event.preventDefault();
     if (choosingComparison) {
       setChoosingComparison(false);
       $('compare').focus();
@@ -2322,7 +2327,10 @@ $('place-query').addEventListener('keydown', event => {
   }
 });
 $('place-query').addEventListener('blur', () => {
-  setTimeout(() => { if (document.activeElement !== $('place-query')) closePlaceResults(); }, 120);
+  setTimeout(() => {
+    if (document.activeElement !== $('place-query') &&
+        !$('place-results').contains(document.activeElement)) closePlaceResults();
+  }, 200);
 });
 $('mode').addEventListener('change', event => {
   mode = event.target.value;
