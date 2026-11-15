@@ -413,17 +413,17 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 @media(max-width:560px){.record-axis span:is([data-year="1920"],[data-year="2075"]){display:none}}
 
 /* Projections page: one column that the prose, equations and table all share. */
-.methods-page:has(.hindcast){width:min(46rem,100%)}
-.methods-page:has(.hindcast) .methods section{padding:22px 0 26px}
-.methods-page:has(.hindcast) .methods h2{font:650 21px/1.2 var(--display);letter-spacing:-.015em;margin:0 0 10px}
-.methods-page:has(.hindcast) .methods p{max-width:none;font-size:15.5px;line-height:1.7}
-.methods-page:has(.hindcast) .methods p+p{margin-top:10px}
+.methods-page.narrow{width:min(46rem,100%)}
+.methods-page.narrow .methods section{padding:22px 0 26px}
+.methods-page.narrow .methods h2{font:650 21px/1.2 var(--display);letter-spacing:-.015em;margin:0 0 10px}
+.methods-page.narrow .methods p{max-width:none;font-size:15.5px;line-height:1.7}
+.methods-page.narrow .methods p+p{margin-top:10px}
 .methods .eq{margin:14px 0;padding:10px 0 10px 16px;border-left:3px solid var(--proj);background:linear-gradient(90deg,color-mix(in srgb,var(--proj) 7%,transparent),transparent 85%);overflow-x:auto;overflow-y:hidden}
 .methods .eq .katex-display{margin:0;padding:2px 0;text-align:left;overflow:visible}
 .methods .eq .katex-display>.katex{text-align:left}
 .methods .eq .katex-display>.katex>.katex-html{text-align:left}
-.methods-page:has(.hindcast) .source-table-wrap{margin-top:16px}
-.methods-page:has(.hindcast) .source-table-wrap+p{margin-top:18px}
+.methods-page.narrow .source-table-wrap{margin-top:16px}
+.methods-page.narrow .source-table-wrap+p{margin-top:18px}
 .source-table.hindcast{font-size:12px;line-height:1.3}
 .source-table.hindcast th,.source-table.hindcast td{padding:7px 6px}
 .source-table.hindcast :is(th,td):first-child{padding-left:12px}
@@ -447,3 +447,27 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .methods .next-steps{max-width:72ch;margin:10px 0 0;padding-left:1.2em;font-size:15px;line-height:1.6;color:var(--muted)}
 .methods .next-steps li+li{margin-top:8px}
 .methods .next-steps b{color:var(--ink);font-weight:650}
+
+/* ---------- Projections page chart ---------- */
+.proj-figure{margin:6px 0 4px;padding:16px 16px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.proj-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;font-size:14px;font-weight:650}
+.proj-readout{font:500 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+#proj-chart{display:block;width:100%;height:auto;margin-top:8px;cursor:crosshair;touch-action:pan-y}
+#proj-chart text{font:500 11px var(--mono);fill:var(--muted)}
+#proj-chart .grid{stroke:var(--line);stroke-width:1}
+#proj-chart .zero{stroke:#a0aa9f}
+#proj-chart .window{fill:var(--accent);opacity:.1}
+#proj-chart .obs{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linejoin:round}
+#proj-chart .fit{fill:none;stroke:#a7462c;stroke-width:2}
+#proj-chart .band{fill:var(--proj);opacity:.16}
+#proj-chart .proj{fill:none;stroke:var(--proj);stroke-width:2;stroke-dasharray:6 4}
+#proj-chart .cursor{stroke:var(--muted);stroke-width:1}
+#proj-chart .note{fill:var(--ink);font-family:var(--ui);font-size:11.5px}
+[data-theme=dark] #proj-chart .fit{stroke:#f0a880}
+.proj-figure .chart-legend{margin-top:8px}
+.methods .steps-list{max-width:none;margin:10px 0 0;padding-left:1.3em;font-size:15.5px;line-height:1.65;color:var(--muted)}
+.methods .steps-list li+li{margin-top:8px}
+.methods .steps-list b{color:var(--ink);font-weight:650}
+.methods .steps-list+p{margin-top:14px}
+.proj-figure{margin-bottom:22px}
+@media(max-width:560px){#proj-chart text{font-size:17px}#proj-chart .note{display:none}}
