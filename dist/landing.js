@@ -115,12 +115,3 @@ function drawRecord() {
 
 drawRecord();
 document.addEventListener('atlas-theme-change', drawRecord);
-
-fetch('assets/cities.json').then(response => response.json()).then(places => {
-  $('hero-places').replaceChildren(...places.map(place => new Option(place.region || '', place.name)));
-}).catch(() => {});
-
-$('hero-search').addEventListener('submit', event => {
-  event.preventDefault();
-  document.dispatchEvent(new CustomEvent('atlas-find-place', {detail: $('hero-query').value}));
-});

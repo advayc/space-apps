@@ -250,6 +250,15 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .hero .lede{max-width:52ch;margin-top:4px;font-size:clamp(16px,1.5vw,19px);line-height:1.4;color:var(--muted)}
 .hero-search{display:flex;gap:8px;margin-top:8px;max-width:34rem}
 #hero-query{flex:1;min-width:0;height:50px;padding:0 16px;border:1px solid #b9bdb0;border-radius:10px;background:var(--card);color:var(--ink);font-size:16px}
+.hero-place-field{position:relative;flex:1;min-width:0}
+.hero-place-field #hero-query{width:100%}
+#hero-results{position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:260px;overflow:auto;margin:0;padding:4px;list-style:none;border:1px solid var(--line);border-radius:8px;background:var(--card);box-shadow:0 10px 28px rgba(23,39,33,.18)}
+#hero-results[hidden]{display:none}
+#hero-results button{width:100%;display:flex;justify-content:space-between;gap:10px;align-items:baseline;border:0;background:transparent;color:var(--ink);text-align:left;border-radius:5px;padding:9px;font:inherit}
+#hero-results button:hover,#hero-results [aria-selected=true] button{background:var(--hover,#e8ece1)}
+#hero-results .place-name{font-weight:650;min-width:0}
+#hero-results .place-region{font:500 11px var(--mono);color:var(--muted);text-align:right}
+#hero-results .place-empty{padding:10px;color:var(--muted);font-size:13px}
 #hero-query::placeholder{color:var(--muted)}
 [data-theme=dark] #hero-query{border-color:#47605f;background:#12262b}
 .cta{display:inline-flex;align-items:center;justify-content:center;height:50px;padding:0 20px;border:0;border-radius:10px;background:#244e3d;color:#fff;font-size:15px;font-weight:650;white-space:nowrap}

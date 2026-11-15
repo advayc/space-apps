@@ -14,6 +14,7 @@ const rasterCtx = raster.getContext('2d');
 const NO_DATA_COLOR = [88, 99, 107];
 const DEFAULT_PLACE = {name: 'Canadian Arctic', region: 'Canada', lon: -95, lat: 74, kind: 'region'};
 let cities = [DEFAULT_PLACE];
+let searchablePlaces = [], placeSearchReady = false, placeSearchFailed = false, pendingHeroQuery = null;
 let countryFeatures = [];
 let provinces = [];
 let majorCities = [];
@@ -2119,7 +2120,19 @@ function changeView(next) {
 }
 
 function normalizePlace(query) {
-  return query.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  return query.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[,]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildPlaceSearch() {
+  const places = [...cities];
+  for (const city of majorCities) {
+    if (cities.some(place => normalizePlace(place.name) === normalizePlace(city.name) &&
+      Math.abs(place.lat - city.lat) < .15 && Math.abs(place.lon - city.lon) < .15)) continue;
+    const region = [...new Set([city.region, city.country].filter(Boolean))].join(', ');
+    places.push({...city, region});
+  }
+  searchablePlaces = places.map(place => ({place, name: normalizePlace(place.name),
+    region: normalizePlace(place.region || '')}));
 }
 
 function coordinatePlace(query) {
@@ -2147,16 +2160,14 @@ function searchPlaces(query) {
     );
   }
   const scored = [];
-  for (const place of cities) {
-    const name = normalizePlace(place.name);
-    const region = normalizePlace(place.region || '');
+  for (const {place, name, region} of searchablePlaces) {
     const haystack = name + ' ' + region;
-    if (!haystack.includes(needle)) continue;
-    const score = (name.startsWith(needle) ? 0 : name.includes(needle) ? 1 : 2)
+    if (!haystack.includes(needle) && !needle.split(' ').every(part => haystack.includes(part))) continue;
+    const score = (name === needle ? -1 : name.startsWith(needle) ? 0 : name.includes(needle) ? 1 : 2)
       + (place.kind === 'region' ? -.1 : 0);
     scored.push({place, score});
   }
-  scored.sort((a, b) => a.score - b.score || a.place.name.localeCompare(b.place.name));
+  scored.sort((a, b) => a.score - b.score || (b.place.pop || 0) - (a.place.pop || 0) || a.place.name.localeCompare(b.place.name));
   return scored.slice(0, 12).map(entry => entry.place);
 }
 
@@ -2816,7 +2827,86 @@ function renderSources() {
   for (const row of $('source-rows').children) row.classList.toggle('current', row.dataset.layer === layer);
 }
 
-// Landing page hooks: the hero search and the "show me" buttons in the steps.
+// The hero uses the same matching and coordinates as the atlas search.
+let heroMatches = [], heroActive = -1;
+function closeHeroResults() {
+  heroMatches = [];
+  heroActive = -1;
+  $('hero-results').hidden = true;
+  $('hero-results').replaceChildren();
+  $('hero-query').setAttribute('aria-expanded', 'false');
+  $('hero-query').removeAttribute('aria-activedescendant');
+}
+function renderHeroResults() {
+  const input = $('hero-query'), list = $('hero-results');
+  if (!input.value.trim()) { closeHeroResults(); return; }
+  heroMatches = placeSearchReady ? searchPlaces(input.value) : [];
+  heroActive = heroMatches.length ? 0 : -1;
+  if (!heroMatches.length) {
+    const message = document.createElement('li');
+    message.className = 'place-empty';
+    message.setAttribute('role', 'presentation');
+    message.textContent = placeSearchFailed ? 'Place search could not load. Reload to try again.' :
+      placeSearchReady ? 'No match. Try a different name or latitude, longitude.' : 'Loading places…';
+    list.replaceChildren(message);
+    input.removeAttribute('aria-activedescendant');
+  } else {
+    list.replaceChildren(...heroMatches.map((place, index) => {
+      const item = document.createElement('li');
+      item.id = 'hero-option-' + index;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', index === heroActive);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.tabIndex = -1;
+      const name = document.createElement('span'), region = document.createElement('span');
+      name.className = 'place-name'; name.textContent = place.name;
+      region.className = 'place-region'; region.textContent = place.region || '';
+      button.append(name, region);
+      button.addEventListener('pointerdown', event => { if (event.pointerType !== 'touch') event.preventDefault(); });
+      button.addEventListener('click', () => selectHeroPlace(place));
+      item.append(button);
+      return item;
+    }));
+    input.setAttribute('aria-activedescendant', 'hero-option-0');
+  }
+  list.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+function selectHeroPlace(place) {
+  $('hero-query').value = place.name;
+  closeHeroResults();
+  goToPlace(place, false);
+  $('atlas').scrollIntoView({block: 'start'});
+}
+$('hero-query').addEventListener('input', renderHeroResults);
+$('hero-query').addEventListener('focus', renderHeroResults);
+$('hero-query').addEventListener('blur', () => setTimeout(() => {
+  if (document.activeElement !== $('hero-query') && !$('hero-results').contains(document.activeElement)) closeHeroResults();
+}, 200));
+$('hero-query').addEventListener('keydown', event => {
+  if (event.key === 'Escape') { event.preventDefault(); closeHeroResults(); }
+  else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if ($('hero-results').hidden) renderHeroResults();
+    if (!heroMatches.length) return;
+    event.preventDefault();
+    heroActive = (heroActive + (event.key === 'ArrowDown' ? 1 : -1) + heroMatches.length) % heroMatches.length;
+    [...$('hero-results').children].forEach((item, i) => item.setAttribute('aria-selected', i === heroActive));
+    $('hero-query').setAttribute('aria-activedescendant', 'hero-option-' + heroActive);
+    $('hero-option-' + heroActive)?.scrollIntoView({block: 'nearest'});
+  }
+});
+$('hero-search').addEventListener('submit', event => {
+  event.preventDefault();
+  const query = $('hero-query').value.trim();
+  if (!query) return;
+  if (!placeSearchReady) { pendingHeroQuery = query; renderHeroResults(); return; }
+  const match = heroMatches[heroActive] || searchPlaces(query)[0];
+  if (match) selectHeroPlace(match);
+  else renderHeroResults();
+});
+
+// Landing page hooks for the "show me" buttons in the steps.
 document.addEventListener('atlas-find-place', event => {
   const query = event.detail;
   const match = active ? searchPlaces(query)[0] : null;
@@ -2868,6 +2958,7 @@ try {
   let admin1;
   [catalog, land, borders, cities, majorCities, admin1] = await Promise.all([catalogReady,
     ...['land.json', 'countries.json', 'cities.json', 'major-cities.json', 'admin1.json'].map(async file => (await fetchAsset(file)).json())]);
+  buildPlaceSearch();
   d3 = window.d3;
   globe = d3.geoOrthographic().clipAngle(90);
   flatMap = d3.geoEquirectangular();
@@ -2878,7 +2969,15 @@ try {
   populateLayers();
   changeView(view);
   await selectLayer(layer);
+  placeSearchReady = true;
+  if (pendingHeroQuery && $('hero-query').value.trim() === pendingHeroQuery) {
+    const match = searchPlaces(pendingHeroQuery)[0];
+    pendingHeroQuery = null;
+    if (match) selectHeroPlace(match); else renderHeroResults();
+  } else if (document.activeElement === $('hero-query')) renderHeroResults();
 } catch (error) {
+  placeSearchFailed = true;
+  if (document.activeElement === $('hero-query')) renderHeroResults();
   $('map-status').textContent = 'The atlas could not initialize. Reload to retry.';
   console.error(error);
 }
