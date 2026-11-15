@@ -52,7 +52,8 @@ let comparison = null, choosingComparison = false, primaryQuery = '';
 let timer, frame, drag, active, width, height, mapBounds, rasterMap, grid;
 let cameraFrame, zoomTarget, cellColors;
 let flatMap, flatZoom = 1, flatOffset = [0, 0];
-let chartData, chartCursor, chartLayout;
+let chartData, chartCursor;
+const chartLayouts = new Map();
 // Visible slice of the chart in index units, or null for the whole record.
 let chartView = null;
 const MIN_CHART_SPAN = 8;
@@ -200,12 +201,15 @@ async function selectDate(index, {scrub = false} = {}) {
     return true;
   }
   active = null;
-  chartData = chartCursor = chartLayout = chartView = null;
+  chartData = chartCursor = chartView = null;
+  chartLayouts.clear();
+  monthlyDetailVersion++;
+  if ($('monthly-detail').open) $('monthly-status').textContent = 'Loading monthly values…';
   clearChartInterval();
   updateZoomControls();
   $('chart').closest('.inspector').setAttribute('aria-busy', 'true');
   $('historical-averages').hidden = true;
-  $('chart-tooltip').hidden = true;
+  $('chart-tooltip').hidden = $('preview-tooltip').hidden = true;
   $('chart-readout').textContent = '';
   mapHover = null;
   updateMapReadout();
@@ -338,6 +342,7 @@ function update(fade = 0, {scrub = false} = {}) {
   $('mode-label').textContent = mode === 'trend' ? '30-YEAR LINEAR TREND'
     : (projectedNow ? 'PROJECTED ' : '') + mode.toUpperCase() + ' ANOMALY';
   $('chart-title').textContent = periodTitle() + ' anomalies';
+  $('chart-preview-title').textContent = $('chart-title').textContent;
   updateMapReadout();
   $('legend-title').textContent = (mode === 'trend' ? 'Change / decade' : 'Anomaly') + ' (' + active.unit + ')';
   const scale = mode === 'trend' ? active.trendScale : active.scale;
@@ -574,6 +579,11 @@ function updateInspector() {
   $('chart-path-text').textContent = other ? 'A possible path' : 'One possible path';
   $('chart-compare-legend').hidden = !other;
   $('chart-compare-projection').hidden = !otherFuture;
+  $('preview-primary-legend').textContent = other ? 'A record' : 'Measured';
+  $('preview-compare-legend').hidden = !other;
+  $('preview-projection-legend').hidden = !future && !otherFuture;
+  $('chart-preview').setAttribute('aria-label', periodTitle() + ' anomalies for ' + placeName +
+    (comparison ? ' and ' + comparison.name : ''));
   $('chart-help').textContent = (other ? 'Select two points to fit that span for A. Both records share the same scale.'
     : 'The line fits this place’s measured record. Select two points to fit that span.') +
     ' Zoom with + and −, a pinch, or Ctrl + scroll, then drag to move along the years.';
@@ -621,6 +631,7 @@ function updateInspector() {
   updateComparisonTrend(chartData, basis, estimate?.rate);
   updateChartInterval();
   drawChart();
+  updateMonthlyDetail();
 }
 
 function historicalAverage(values, cellIndex) {
@@ -937,21 +948,26 @@ function chartPointLabel(index) {
 }
 
 function drawChart() {
+  drawChartSurface(chart, $('chart-tooltip'));
+  drawChartSurface($('chart-preview'), $('preview-tooltip'));
+}
+
+function drawChartSurface(canvas, tooltip) {
   if (!active || !chartData) return;
   const {series, central, idx, other} = chartData;
-  const g = chart.getContext('2d');
-  const [w, h] = sizeCanvas(chart);
+  const g = canvas.getContext('2d');
+  const [w, h] = sizeCanvas(canvas);
+  if (!w || !h) return;
   g.clearRect(0, 0, w, h);
   const dark = document.documentElement.dataset.theme === 'dark';
   const inspected = chartCursor ?? idx;
   const label = chartPointLabel(inspected);
   $('chart-readout').textContent = label;
-  const tooltip = $('chart-tooltip');
   tooltip.textContent = label;
   const hasData = series.some(Number.isFinite) || other?.values.some(Number.isFinite);
   tooltip.hidden = chartCursor == null || !hasData;
   const {left, right, bottom, top, x, y, c} = paintChart(g, 0, 0, w, h, {dark, k: w >= 480 ? 1.25 : 1});
-  chartLayout = {left, right, bottom};
+  chartLayouts.set(canvas, {left, right});
   if (!hasData) return;
   g.save();
   g.beginPath(); g.rect(left, 0, right - left, h); g.clip();
@@ -987,18 +1003,19 @@ function drawChart() {
   }
 }
 
-function chartIndexAt(event) {
+function chartIndexAt(canvas, event) {
+  const chartLayout = chartLayouts.get(canvas);
   if (!active || !chartLayout || !chartData) return null;
   const {left, right} = chartLayout;
   if (right <= left) return null;
-  return Math.round(chartIndexFloat(event.clientX));
+  return Math.round(chartIndexFloat(canvas, event.clientX));
 }
 
 // Fractional index under a screen x, inside the current view.
-function chartIndexFloat(clientX) {
-  const {left, right} = chartLayout;
+function chartIndexFloat(canvas, clientX) {
+  const {left, right} = chartLayouts.get(canvas);
   const [v0, v1] = viewRange();
-  const x = clientX - chart.getBoundingClientRect().left;
+  const x = clientX - canvas.getBoundingClientRect().left;
   return v0 + clamp((x - left) / (right - left), 0, 1) * (v1 - v0);
 }
 
@@ -1039,10 +1056,12 @@ function panChart(deltaIndex) {
 function updateZoomControls() {
   const last = (active?.years.length ?? 2) - 1;
   const [v0, v1] = viewRange();
-  $('zoom-in').disabled = !active || v1 - v0 <= Math.min(MIN_CHART_SPAN, last) + 1e-6;
-  $('zoom-out').disabled = $('zoom-reset').disabled = !chartView;
-  $('zoom-range').textContent = chartView && active
-    ? active.years[Math.ceil(v0)] + '–' + active.years[Math.floor(v1)] : '';
+  for (const prefix of ['', 'preview-']) {
+    $(prefix + 'zoom-in').disabled = !active || v1 - v0 <= Math.min(MIN_CHART_SPAN, last) + 1e-6;
+    $(prefix + 'zoom-out').disabled = $(prefix + 'zoom-reset').disabled = !chartView;
+    $(prefix + 'zoom-range').textContent = chartView && active
+      ? active.years[Math.ceil(v0)] + '–' + active.years[Math.floor(v1)] : '';
+  }
 }
 
 function inspectChart(index, announce = false) {
@@ -1054,10 +1073,12 @@ function inspectChart(index, announce = false) {
 
 function updateChartInterval() {
   $('chart-interval').hidden = intervalAnchor === null;
+  $('preview-interval').hidden = intervalAnchor === null;
   $('interval-values').hidden = intervalEnd === null;
   if (intervalAnchor === null || !chartData || !active) return;
   if (intervalEnd === null) {
     $('interval-summary').textContent = labelForYear(active.years[intervalAnchor]) + ' selected. Pick another point.';
+    $('preview-interval-summary').textContent = $('interval-summary').textContent;
     return;
   }
   const start = Math.min(intervalAnchor, intervalEnd);
@@ -1069,6 +1090,7 @@ function updateChartInterval() {
   $('interval-summary').textContent = startYear + '–' + endYear + ' · ' +
     (endYear - startYear) + (endYear - startYear === 1 ? ' year' : ' years') +
     (end >= active.observed ? ' · includes projected values' : '');
+  $('preview-interval-summary').textContent = $('interval-summary').textContent;
   setMetric($('interval-start'), startValue, active.unit);
   setMetric($('interval-end'), endValue, active.unit);
   setMetric($('interval-change'), endValue - startValue, active.unit);
@@ -1097,111 +1119,245 @@ $('interval-clear').addEventListener('click', () => {
   chart.focus();
   drawChart();
 });
-// Drag sideways to pan a zoomed chart; pinch with two fingers to zoom.
-const chartPointers = new Map();
-let chartGesture = null, chartDragged = false;
-chart.addEventListener('pointerdown', event => {
-  if (!chartLayout || !active) return;
-  chartPointers.set(event.pointerId, event.clientX);
-  chartDragged = false;
-  if (chartPointers.size === 2) {
-    const [a, b] = [...chartPointers.values()];
-    chartGesture = {pinch: true, distance: Math.abs(a - b) || 1, view: viewRange(),
-      anchor: chartIndexFloat((a + b) / 2)};
-  } else {
-    chartGesture = {pinch: false, x: event.clientX, view: viewRange()};
-  }
+$('preview-interval-clear').addEventListener('click', () => {
+  clearChartInterval();
+  $('chart-preview').focus();
+  drawChart();
 });
-chart.addEventListener('pointermove', event => {
-  if (chartPointers.has(event.pointerId) && chartGesture && chartLayout) {
+function bindChart(canvas, prefix = '') {
+  // Drag sideways to pan a zoomed chart; pinch with two fingers to zoom.
+  const chartPointers = new Map();
+  let chartGesture = null, chartDragged = false;
+  canvas.addEventListener('pointerdown', event => {
+    const chartLayout = chartLayouts.get(canvas);
+    if (!chartLayout || !active) return;
     chartPointers.set(event.pointerId, event.clientX);
-    const [v0, v1] = chartGesture.view;
-    const perPixel = (v1 - v0) / (chartLayout.right - chartLayout.left);
-    if (chartGesture.pinch && chartPointers.size === 2) {
+    chartDragged = false;
+    if (chartPointers.size === 2) {
       const [a, b] = [...chartPointers.values()];
-      const factor = chartGesture.distance / (Math.abs(a - b) || 1);
-      const {anchor} = chartGesture, t = (anchor - v0) / (v1 - v0), span = (v1 - v0) * factor;
-      chartDragged = true;
-      setChartView(anchor - t * span, anchor - t * span + span);
-      return;
+      chartGesture = {pinch: true, distance: Math.abs(a - b) || 1, view: viewRange(),
+        anchor: chartIndexFloat(canvas, (a + b) / 2)};
+    } else {
+      chartGesture = {pinch: false, x: event.clientX, view: viewRange()};
     }
-    const dx = event.clientX - chartGesture.x;
-    if (!chartGesture.pinch && chartView && (chartDragged || Math.abs(dx) > 4)) {
-      if (!chartDragged) chart.setPointerCapture(event.pointerId);
-      chartDragged = true;
-      chart.classList.add('panning');
-      setChartView(v0 - dx * perPixel, v1 - dx * perPixel);
-      return;
+  });
+  canvas.addEventListener('pointermove', event => {
+    const chartLayout = chartLayouts.get(canvas);
+    if (chartPointers.has(event.pointerId) && chartGesture && chartLayout) {
+      chartPointers.set(event.pointerId, event.clientX);
+      const [v0, v1] = chartGesture.view;
+      const perPixel = (v1 - v0) / (chartLayout.right - chartLayout.left);
+      if (chartGesture.pinch && chartPointers.size === 2) {
+        const [a, b] = [...chartPointers.values()];
+        const factor = chartGesture.distance / (Math.abs(a - b) || 1);
+        const {anchor} = chartGesture, t = (anchor - v0) / (v1 - v0), span = (v1 - v0) * factor;
+        chartDragged = true;
+        setChartView(anchor - t * span, anchor - t * span + span);
+        return;
+      }
+      const dx = event.clientX - chartGesture.x;
+      if (!chartGesture.pinch && chartView && (chartDragged || Math.abs(dx) > 4)) {
+        if (!chartDragged) canvas.setPointerCapture(event.pointerId);
+        chartDragged = true;
+        canvas.classList.add('panning');
+        setChartView(v0 - dx * perPixel, v1 - dx * perPixel);
+        return;
+      }
     }
-  }
-  inspectChart(chartIndexAt(event));
-});
-const endChartPointer = event => {
-  chartPointers.delete(event.pointerId);
-  if (!chartPointers.size) { chartGesture = null; chart.classList.remove('panning'); }
-};
-chart.addEventListener('pointerup', endChartPointer);
-chart.addEventListener('pointercancel', endChartPointer);
-chart.addEventListener('wheel', event => {
-  if (!chartLayout || !active) return;
-  const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
-  if (event.ctrlKey || event.metaKey) {
-    // Trackpad pinch arrives as ctrl+wheel.
-    event.preventDefault();
-    zoomChart(Math.exp(clamp(event.deltaY, -60, 60) * .01), chartIndexFloat(event.clientX));
-  } else if (sideways && chartView) {
-    event.preventDefault();
-    const [v0, v1] = viewRange();
-    const delta = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
-    panChart(delta * (v1 - v0) / (chartLayout.right - chartLayout.left));
-  }
-}, {passive: false});
-chart.addEventListener('dblclick', event => {
-  event.preventDefault();
-  if (chartView) setChartView(0, Infinity);
-});
-$('zoom-in').addEventListener('click', () => zoomChart(.6));
-$('zoom-out').addEventListener('click', () => zoomChart(1 / .6));
-$('zoom-reset').addEventListener('click', () => setChartView(0, Infinity));
-chart.addEventListener('pointerleave', () => inspectChart(null));
-chart.addEventListener('blur', () => inspectChart(null));
-chart.addEventListener('click', event => {
-  if (chartDragged) { chartDragged = false; return; }
-  const index = chartIndexAt(event);
-  inspectChart(index);
-  selectChartPoint(index);
-});
-chart.addEventListener('keydown', event => {
-  if (!active) return;
-  const index = chartCursor ?? yearIndex();
-  const next = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: active.years.length - 1};
-  if (Object.hasOwn(next, event.key)) {
-    event.preventDefault();
-    const target = clamp(next[event.key], 0, active.years.length - 1);
-    const [v0, v1] = viewRange();
-    if (chartView && (target < v0 || target > v1)) {
-      const span = v1 - v0;
-      setChartView(target < v0 ? target : target - span, target < v0 ? target + span : target);
+    inspectChart(chartIndexAt(canvas, event));
+  });
+  const endChartPointer = event => {
+    chartPointers.delete(event.pointerId);
+    if (!chartPointers.size) { chartGesture = null; canvas.classList.remove('panning'); }
+  };
+  canvas.addEventListener('pointerup', endChartPointer);
+  canvas.addEventListener('pointercancel', endChartPointer);
+  canvas.addEventListener('wheel', event => {
+    const chartLayout = chartLayouts.get(canvas);
+    if (!chartLayout || !active) return;
+    const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey;
+    if (event.ctrlKey || event.metaKey) {
+      // Trackpad pinch arrives as ctrl+wheel.
+      event.preventDefault();
+      zoomChart(Math.exp(clamp(event.deltaY, -60, 60) * .01), chartIndexFloat(canvas, event.clientX));
+    } else if (sideways && chartView) {
+      event.preventDefault();
+      const [v0, v1] = viewRange();
+      const delta = event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX;
+      panChart(delta * (v1 - v0) / (chartLayout.right - chartLayout.left));
     }
-    inspectChart(target, true);
-  } else if (event.key === '+' || event.key === '=') {
+  }, {passive: false});
+  canvas.addEventListener('dblclick', event => {
     event.preventDefault();
-    zoomChart(.6);
-  } else if (event.key === '-' || event.key === '_') {
-    event.preventDefault();
-    zoomChart(1 / .6);
-  } else if (event.key === '0') {
-    event.preventDefault();
-    setChartView(0, Infinity);
-  } else if (event.key === 'Enter') {
-    event.preventDefault();
+    if (chartView) setChartView(0, Infinity);
+  });
+  $(prefix + 'zoom-in').addEventListener('click', () => zoomChart(.6));
+  $(prefix + 'zoom-out').addEventListener('click', () => zoomChart(1 / .6));
+  $(prefix + 'zoom-reset').addEventListener('click', () => setChartView(0, Infinity));
+  canvas.addEventListener('pointerleave', () => inspectChart(null));
+  canvas.addEventListener('blur', () => inspectChart(null));
+  canvas.addEventListener('click', event => {
+    if (chartDragged) { chartDragged = false; return; }
+    const index = chartIndexAt(canvas, event);
+    inspectChart(index);
     selectChartPoint(index);
-  } else if (event.key === 'Escape') {
-    clearChartInterval();
-    chartCursor = null;
-    drawChart();
+  });
+  canvas.addEventListener('keydown', event => {
+    if (!active) return;
+    const index = chartCursor ?? yearIndex();
+    const next = {ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: active.years.length - 1};
+    if (Object.hasOwn(next, event.key)) {
+      event.preventDefault();
+      const target = clamp(next[event.key], 0, active.years.length - 1);
+      const [v0, v1] = viewRange();
+      if (chartView && (target < v0 || target > v1)) {
+        const span = v1 - v0;
+        setChartView(target < v0 ? target : target - span, target < v0 ? target + span : target);
+      }
+      inspectChart(target, true);
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomChart(.6);
+    } else if (event.key === '-' || event.key === '_') {
+      event.preventDefault();
+      zoomChart(1 / .6);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      setChartView(0, Infinity);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      selectChartPoint(index);
+    } else if (event.key === 'Escape') {
+      clearChartInterval();
+      chartCursor = null;
+      drawChart();
+    }
+  });
+}
+
+bindChart(chart);
+bindChart($('chart-preview'), 'preview-');
+
+
+let monthlyDetailVersion = 0;
+let monthlyData, monthlyRequest, monthlyKey, monthlyDate;
+
+async function monthlyHistory(key, primaryIndex, otherIndex) {
+  const info = catalog[key];
+  const size = info.width * info.height;
+  const records = [];
+  for (const [period] of months) {
+    const entry = info.periods[period];
+    const grid = await decodeGrid(entry, size * entry.years.length);
+    for (const [i, year] of entry.years.entries()) {
+      records.push({
+        date: year * 12 + Number(period) - 1,
+        primary: grid[i * size + primaryIndex],
+        other: otherIndex == null ? NaN : grid[i * size + otherIndex],
+      });
+    }
   }
+  records.sort((a, b) => a.date - b.date);
+  return records;
+}
+
+async function updateMonthlyDetail() {
+  if (!$('monthly-detail').open || !chartData || !active) return;
+  const version = ++monthlyDetailVersion;
+  const {index, other} = chartData;
+  const key = [active.key, index, other?.index].join(':');
+  if (key !== monthlyKey) {
+    monthlyKey = key;
+    monthlyData = null;
+    drawMonthlyDetail();
+    $('monthly-status').textContent = 'Loading monthly values…';
+    monthlyRequest = monthlyHistory(active.key, index, other?.index);
+  }
+  const detailDate = year * 12 + (mode === 'monthly' ? Number(periodKey()) - 1 : 11);
+  try {
+    const records = await monthlyRequest;
+    if (version !== monthlyDetailVersion) return;
+    if (monthlyData?.timelineDate !== detailDate) monthlyDate = detailDate;
+    monthlyData = {records, timelineDate: detailDate};
+    drawMonthlyDetail();
+  } catch {
+    if (version !== monthlyDetailVersion) return;
+    monthlyKey = null;
+    $('monthly-status').textContent = 'Monthly values could not load. Reopen Monthly detail to retry.';
+  }
+}
+
+function monthlyLabel(index) {
+  return dateLabel(Math.floor(index / 12), String(index % 12 + 1).padStart(2, '0'));
+}
+
+function drawMonthlyDetail() {
+  if (!$('monthly-detail').open) return;
+  const canvas = $('monthly-chart');
+  const [w, h] = sizeCanvas(canvas);
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const cursor = $('monthly-cursor');
+  const earlier = $('monthly-earlier'), later = $('monthly-later');
+  cursor.disabled = earlier.disabled = later.disabled = !monthlyData || !active;
+  if (!monthlyData || !active) {
+    $('monthly-readout').textContent = '';
+    return;
+  }
+  const {records} = monthlyData;
+  const span = Number($('monthly-span').value);
+  const first = records[0].date, last = records.at(-1).date;
+  const end = clamp(monthlyDate, Math.min(first + span - 1, last), last);
+  const start = Math.max(first, end - span + 1);
+  monthlyDate = end;
+  earlier.disabled = start === first;
+  later.disabled = end === last;
+  const values = records.filter(record => record.date >= start && record.date <= end);
+  const a = values.map(record => record.primary), b = values.map(record => record.other);
+  const finite = a.concat(b).filter(Number.isFinite);
+  const min = Math.min(0, ...finite), max = Math.max(0, ...finite);
+  const c = chartColors(document.documentElement.dataset.theme === 'dark');
+  const left = 38, right = w - 8, bottom = h - 22;
+  const x = i => left + i / Math.max(1, values.length - 1) * (right - left);
+  const y = v => max === min ? bottom / 2 : bottom - (v - min) / (max - min) * (bottom - 10);
+  g.font = '10px "IBM Plex Mono", monospace';
+  g.fillStyle = c.text;
+  for (const tick of new Set([min, 0, max])) {
+    const ty = y(tick);
+    g.beginPath(); g.moveTo(left, ty); g.lineTo(right, ty);
+    g.strokeStyle = c.grid; g.lineWidth = 1; g.stroke();
+    g.fillText(signed(tick, 1), 0, ty + 3);
+  }
+  paintSeries(g, b, 0, b.length, x, y, c.other, 1.5);
+  paintSeries(g, a, 0, a.length, x, y, c.line, 1.5);
+  g.fillText(monthlyLabel(start), left, h - 4);
+  g.textAlign = 'right'; g.fillText(monthlyLabel(end), right, h - 4); g.textAlign = 'left';
+  $('monthly-status').textContent = finite.length ? 'Historical monthly anomalies · ' + active.unit : 'No monthly observations in this window.';
+  Object.assign(cursor, {min: 0, max: values.length - 1, value: Math.min(Number(cursor.value), values.length - 1)});
+  const i = Number(cursor.value), px = x(i);
+  g.beginPath(); g.moveTo(px, 10); g.lineTo(px, bottom); g.strokeStyle = c.marker; g.stroke();
+  const label = monthlyLabel(values[i].date);
+  const metric = n => Number.isFinite(n) ? signed(n) + ' ' + active.unit : 'No data';
+  cursor.setAttribute('aria-valuetext', label);
+  $('monthly-readout').textContent = label + ' · ' + (comparison ? 'A ' : '') + metric(a[i]) + (comparison ? ' · B ' + metric(b[i]) : '');
+}
+
+$('monthly-detail').addEventListener('toggle', updateMonthlyDetail);
+$('monthly-span').addEventListener('change', drawMonthlyDetail);
+$('monthly-cursor').addEventListener('input', drawMonthlyDetail);
+$('monthly-earlier').addEventListener('click', () => { monthlyDate -= 12; drawMonthlyDetail(); });
+$('monthly-later').addEventListener('click', () => { monthlyDate += 12; drawMonthlyDetail(); });
+$('monthly-chart').addEventListener('pointermove', event => {
+  if (!monthlyData || !active) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const cursor = $('monthly-cursor');
+  const fraction = clamp((event.clientX - rect.left - 38) / (rect.width - 46), 0, 1);
+  const i = Math.round(fraction * Number(cursor.max));
+  if (i === Number(cursor.value)) return;
+  cursor.value = i;
+  drawMonthlyDetail();
 });
+new ResizeObserver(drawMonthlyDetail).observe($('monthly-chart'));
 
 let playbackRun = 0;
 
@@ -2161,6 +2317,7 @@ function populateLayers() {
 document.addEventListener('atlas-theme-change', () => { if (active) updateInspector(); });
 new ResizeObserver(queueDraw).observe(earth);
 new ResizeObserver(() => { if (active) updateInspector(); }).observe($('chart'));
+new ResizeObserver(drawChart).observe($('chart-preview'));
 
 try {
   // Start the default layer's download the moment the catalog arrives,
