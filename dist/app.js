@@ -1829,7 +1829,7 @@ function updateMapReadout() {
   }
   const {index, center} = cell(mapHover);
   const value = grid[index];
-  output.textContent = coords(point) + ' · ' + (Number.isFinite(value)
+  output.textContent = coords(mapHover) + ' · ' + (Number.isFinite(value)
     ? signed(value) + ' ' + active.unit + (mode === 'trend' ? '/decade' : projectedNow ? ' (projected, one possible year)' : '')
     : 'No data');
 }
