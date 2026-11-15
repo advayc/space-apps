@@ -558,7 +558,7 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 @media(max-width:760px){.scatter-body{grid-template-columns:1fr}.scatter-versus{display:none}.scatter-pick{max-width:none}}
 
 /* ---------- What this trend means ---------- */
-.implications{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:7px;background:var(--card)}
+.implications{display:grid;gap:8px;padding:14px;border:1px solid var(--line);border-radius:7px;background:var(--card)}
 .implications[hidden]{display:none}
 .implications h3{font-size:15px;font-weight:700}
 .implications-lead{font-size:14px;line-height:1.45;font-weight:650}
