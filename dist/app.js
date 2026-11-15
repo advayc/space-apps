@@ -598,7 +598,7 @@ function updateInspector() {
   updateZoomControls();
   updateScatter();
   $('place-name').textContent = placeName;
-  $('coordinates').textContent = coords(center);
+  $('coordinates').textContent = coords(point);
   $('resolution').textContent = active.step + '° grid';
   updateLocationValues(chartData, idx);
   updateHistoricalAverages(chartData);
