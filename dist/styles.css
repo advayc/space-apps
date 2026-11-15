@@ -597,3 +597,49 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .range-summary{margin-top:8px;font-size:14px;line-height:1.5;font-weight:550}
 @media(prefers-reduced-motion:reduce){#range-chart .bar,#range-chart .dot{transition:none}}
 @media(max-width:560px){#range-chart text{font-size:15px}#range-chart .name{font-size:17px}}
+
+/* ---------- Image viewer (lightbox.js) ---------- */
+img.zoomable{cursor:zoom-in;transition:filter .2s ease}
+img.zoomable:hover{filter:brightness(1.06)}
+img.zoomable:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+html.lb-lock{overflow:hidden}
+.lb{position:fixed;inset:0;z-index:1000;color:#f4f6f8;font-family:var(--ui);-webkit-user-select:none;user-select:none}
+.lb[hidden]{display:none}
+.lb-backdrop{position:absolute;inset:0;background:rgba(7,9,12,.97);opacity:0;transition:opacity .32s ease}
+.lb.is-open .lb-backdrop{opacity:1}
+.lb-stage{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab}
+.lb.is-grabbing .lb-stage{cursor:grabbing}
+.lb:not(.is-zoomed) .lb-img{cursor:zoom-in}
+.lb.is-zoomed .lb-img{cursor:inherit}
+.lb-img{position:absolute;display:block;max-width:none;transform-origin:50% 50%;will-change:transform;border-radius:4px;box-shadow:0 18px 60px rgba(0,0,0,.5);-webkit-user-drag:none;pointer-events:auto;image-rendering:auto}
+.lb-bar{position:absolute;left:0;right:0;top:0;height:56px;padding:0 12px 0 18px;display:flex;align-items:center;gap:12px;pointer-events:none;opacity:0;transform:translateY(-6px);transition:opacity .25s ease .08s,transform .25s ease .08s}
+.lb.is-open .lb-bar{opacity:1;transform:none}
+.lb-bar>*{pointer-events:auto}
+.lb-count{font-size:13px;color:#aeb6c0;font-variant-numeric:tabular-nums}
+.lb-load{font-size:12px;color:#8e98a4}
+.lb-tools{margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px;border-radius:12px;background:rgba(28,32,38,.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1)}
+.lb-btn,.lb-nav{font:inherit;color:#f4f6f8;border:0;background:transparent;cursor:pointer;border-radius:8px;transition:background .15s ease,opacity .15s ease}
+.lb-btn{min-width:36px;height:34px;padding:0 10px;font-size:18px;line-height:1}
+.lb-btn.lb-reset{font-size:13px}
+.lb-btn:hover,.lb-nav:hover{background:rgba(255,255,255,.14)}
+.lb-btn:focus-visible,.lb-nav:focus-visible,.lb-caption a:focus-visible{outline:2px solid #ffb48a;outline-offset:2px}
+.lb.at-min [data-act=out],.lb.at-max [data-act=in]{opacity:.35}
+.lb.at-min .lb-reset{opacity:.35}
+.lb-zoom{min-width:48px;text-align:center;font-size:13px;color:#cfd6de;font-variant-numeric:tabular-nums;cursor:pointer}
+.lb-nav{position:absolute;top:50%;width:46px;height:64px;margin-top:-32px;font-size:34px;line-height:1;background:rgba(28,32,38,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transition:opacity .25s ease .1s,background .15s ease}
+.lb.is-open .lb-nav{opacity:.9}
+.lb-nav[hidden]{display:none}
+.lb-prev{left:10px}.lb-next{right:10px}
+.lb-caption{position:absolute;left:50%;bottom:14px;transform:translate(-50%,8px);width:min(780px,calc(100% - 32px));max-height:130px;overflow:auto;padding:10px 14px;border-radius:12px;background:rgba(18,21,26,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:13px;line-height:1.5;color:#dde2e8;text-align:center;opacity:0;transition:opacity .28s ease .12s,transform .28s ease .12s;user-select:text;-webkit-user-select:text}
+.lb-caption[hidden]{display:none}
+.lb.is-open .lb-caption{opacity:1;transform:translate(-50%,0)}
+.lb.is-zoomed .lb-caption{opacity:0;transform:translate(-50%,8px);pointer-events:none;transition-delay:0s}
+.lb-caption .credit{display:block;margin-top:3px;font-size:11.5px;color:#9aa4b0}
+.lb-caption a{color:#ffb48a}
+@media(max-width:700px){
+  .lb-nav{width:38px;height:54px;margin-top:-27px;font-size:28px}
+  .lb-prev{left:4px}.lb-next{right:4px}
+  .lb-btn.lb-reset{display:none}
+  .lb-caption{font-size:12.5px;bottom:10px}
+}
+@media(prefers-reduced-motion:reduce){.lb-backdrop,.lb-bar,.lb-nav,.lb-caption{transition:none}}
