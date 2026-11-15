@@ -566,3 +566,4 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .implications-ahead{font-size:13px;line-height:1.45;color:var(--muted);margin-top:-4px}
 .implications ul{margin:2px 0 0;padding-left:1.15em;display:grid;gap:6px;font-size:13.5px;line-height:1.45}
 .implications li::marker{color:var(--accent)}
+.methods .impact-source{font-size:12.5px;color:var(--muted)}
