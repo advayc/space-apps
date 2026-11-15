@@ -291,15 +291,6 @@
             <canvas id="scatter" aria-label="Scatterplot of the two variables, one point per year" role="img"></canvas>
             <output id="scatter-tooltip" class="chart-tooltip" hidden></output>
           </div>
-          <aside class="scatter-result" aria-label="Correlation result">
-            <p class="scatter-r-label">Correlation, r</p>
-            <p id="scatter-r" class="scatter-r">—</p>
-            <p id="scatter-summary" class="scatter-summary" aria-live="polite"></p>
-            <dl id="scatter-facts" class="scatter-facts"></dl>
-            <label class="scatter-check"><input type="checkbox" id="scatter-detrend"> Remove each variable’s long-term trend first</label>
-            <button id="scatter-csv" class="utility" type="button" disabled>Download these points (CSV)</button>
-            <p class="chart-help">r runs from −1 to +1, and values near 0 mean no straight-line relationship. Two variables that both rise over the decades correlate even if neither affects the other; removing the trend checks for that. A correlation does not show cause.</p>
-          </aside>
         </div>
       </section>
         </section>
@@ -349,6 +340,15 @@
             <p class="averages-note" id="average-baseline-note" hidden></p>
             <p class="averages-note">Record averages use available historical values only.</p>
           </section>
+          <aside class="scatter-result" aria-label="Correlation result">
+            <p class="scatter-r-label">Correlation, r</p>
+            <p id="scatter-r" class="scatter-r">—</p>
+            <p id="scatter-summary" class="scatter-summary" aria-live="polite"></p>
+            <dl id="scatter-facts" class="scatter-facts"></dl>
+            <label class="scatter-check"><input type="checkbox" id="scatter-detrend"> Remove each variable’s long-term trend first</label>
+            <button id="scatter-csv" class="utility" type="button" disabled>Download these points (CSV)</button>
+            <p class="chart-help">r runs from −1 to +1, and values near 0 mean no straight-line relationship. Two variables that both rise over the decades correlate even if neither affects the other; removing the trend checks for that. A correlation does not show cause.</p>
+          </aside>
         </div>
       </div>
       <div class="downloads">
