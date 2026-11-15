@@ -2118,7 +2118,35 @@ function normalizePlace(query) {
   return query.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
+function parseCoordinates(query) {
+  const match = query.trim().match(
+    /^\(?\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:,|\s+)\s*([+-]?(?:\d+(?:\.\d*)?|\.\.\d+))\s*\)?$/
+  );
+
+  if (!match) return null;
+
+  const lat = Number(match[1]);
+  const lon = Number(match[2]);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 || lat > 90 ||
+    lon < -180 || lon > 180
+  ) return null;
+
+  return {
+    name: lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°',
+    region: 'Coordinates · nearest grid cell',
+    lat,
+    lon,
+    kind: 'coordinates',
+  };
+}
+
 function searchPlaces(query) {
+  const coordinates = parseCoordinates(query);
+  if (coordinates) return [coordinates];
   const needle = normalizePlace(query);
   if (!needle) {
     return cities.filter(place => place.kind === 'region').concat(
