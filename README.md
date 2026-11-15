@@ -4,7 +4,7 @@ A simple tool for exploring how Earth’s climate has changed over time.
 
 Pick a variable (temperature, rainfall, ice, and more), choose a place, and see whether that place has warmed, cooled, gotten wetter, or dried — and whether the trend looks statistically meaningful.
 
-Live site: [space.advay.ca](https://space.advay.ca)
+Live site: [gqatlas.vercel.app](https://gqatlas.vercel.app/)
 
 ![GQ Atlas overview](docs/atlas-overview.png)
 
