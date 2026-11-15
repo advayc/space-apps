@@ -567,3 +567,33 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .implications ul{margin:2px 0 0;padding-left:1.15em;display:grid;gap:6px;font-size:13.5px;line-height:1.45}
 .implications li::marker{color:var(--accent)}
 .methods .impact-source{font-size:12.5px;color:var(--muted)}
+
+/* ---------- Impacts page: animal photos and range-shift diagram ---------- */
+.animal-photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 18px;max-width:72ch}
+.animal-photos figure{margin:0}
+.animal-photos figure[hidden]{display:none}
+.animal-photos img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--card)}
+.animal-photos figcaption{margin-top:6px;font-size:12.5px;line-height:1.4;color:var(--muted)}
+.animal-photos .credit{display:block;margin-top:2px;font-size:11px}
+@media(max-width:560px){.animal-photos{grid-template-columns:1fr 1fr}}
+.range-figure{max-width:72ch}
+.range-control{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:13px;color:var(--muted)}
+.range-control input{flex:1;accent-color:var(--accent)}
+#range-chart{display:block;width:100%;height:auto;margin-top:6px}
+#range-chart text{font:500 11px var(--mono);fill:var(--muted)}
+#range-chart .name{font:650 13px var(--ui);fill:var(--ink)}
+#range-chart .value{font:600 12px var(--mono);fill:var(--ink)}
+#range-chart .rail{stroke:var(--line);stroke-width:2}
+#range-chart .tick{stroke:var(--muted);stroke-width:1}
+#range-chart .bar{stroke-width:6;stroke-linecap:round;transition:all .15s}
+#range-chart .dot{stroke:var(--card);stroke-width:2;transition:all .15s}
+#range-chart .sea{stroke:#14688b;fill:#14688b}
+#range-chart .land{stroke:var(--accent);fill:var(--accent)}
+#range-chart .hill{stroke:#a87900;fill:#a87900}
+#range-chart .dot{stroke:var(--card)}
+[data-theme=dark] #range-chart .sea{stroke:#8ed9f3;fill:#8ed9f3}
+[data-theme=dark] #range-chart .hill{stroke:#f0cf6b;fill:#f0cf6b}
+[data-theme=dark] #range-chart .dot{stroke:var(--card)}
+.range-summary{margin-top:8px;font-size:14px;line-height:1.5;font-weight:550}
+@media(prefers-reduced-motion:reduce){#range-chart .bar,#range-chart .dot{transition:none}}
+@media(max-width:560px){#range-chart text{font-size:15px}#range-chart .name{font-size:17px}}
