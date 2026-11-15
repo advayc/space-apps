@@ -2465,11 +2465,14 @@ async function updateScatter() {
   for (const option of $('scatter-layer').options) option.disabled = option.value === xKey;
   const version = ++scatterVersion;
   scatterData = scatterHover = null;
-  $('scatter-body').hidden = !yKey;
   $('scatter-csv').disabled = true;
-  if (!yKey || !active || !chartData) { $('scatter-summary').textContent = ''; return; }
   $('scatter-r').textContent = '—';
   $('scatter-facts').replaceChildren();
+  if (!yKey || !active || !chartData) {
+    $('scatter-summary').textContent = !yKey ? 'Choose a preset or two variables to see their relationship.' : 'Loading…';
+    drawScatter();
+    return;
+  }
   if (yKey === xKey) {
     $('scatter-summary').textContent = 'Pick two different variables.';
     drawScatter();
@@ -2503,9 +2506,24 @@ function drawScatter() {
   g.clearRect(0, 0, w, h);
   scatterLayout = null;
   $('scatter-tooltip').hidden = true;
-  if (!scatterData) return;
   const dark = document.documentElement.dataset.theme === 'dark';
   const c = chartColors(dark);
+  if (!scatterData) {
+    const left = 48, right = w - 18, top = 18, bottom = h - 42;
+    g.strokeStyle = c.grid;
+    for (let i = 0; i <= 4; i++) {
+      const x = left + (right - left) * i / 4, y = top + (bottom - top) * i / 4;
+      g.beginPath(); g.moveTo(x, top); g.lineTo(x, bottom); g.moveTo(left, y); g.lineTo(right, y); g.stroke();
+    }
+    g.strokeStyle = c.zero;
+    g.beginPath(); g.moveTo(left, top); g.lineTo(left, bottom); g.lineTo(right, bottom); g.stroke();
+    g.fillStyle = c.text;
+    g.font = '11px "IBM Plex Sans", sans-serif'; g.textAlign = 'center';
+    g.fillText('X variable', (left + right) / 2, h - 5);
+    g.save(); g.translate(12, (top + bottom) / 2); g.rotate(-Math.PI / 2);
+    g.fillText('Y variable', 0, 0); g.restore();
+    return;
+  }
   const {first, second, points} = scatterData;
   const flat = $('scatter-detrend').checked;
   const xs = flat ? detrend(points.map(p => p.x)) : points.map(p => p.x);
@@ -2576,8 +2594,17 @@ function drawScatter() {
   }
 }
 
-$('scatter-layer').addEventListener('change', updateScatter);
-$('scatter-x').addEventListener('change', updateScatter);
+$('scatter-preset').addEventListener('change', event => {
+  if (!event.target.value) return;
+  const [x, y] = event.target.value.split(',');
+  $('scatter-x').value = x;
+  $('scatter-layer').value = y;
+  updateScatter();
+});
+for (const id of ['scatter-layer', 'scatter-x']) $(id).addEventListener('change', () => {
+  $('scatter-preset').value = '';
+  updateScatter();
+});
 $('scatter-detrend').addEventListener('change', drawScatter);
 $('scatter').addEventListener('pointermove', event => {
   if (!scatterLayout) return;
@@ -2590,7 +2617,7 @@ $('scatter').addEventListener('pointermove', event => {
   if (best !== scatterHover) { scatterHover = best; drawScatter(); }
 });
 $('scatter').addEventListener('pointerleave', () => { if (scatterHover != null) { scatterHover = null; drawScatter(); } });
-new ResizeObserver(() => { if (scatterData) drawScatter(); }).observe($('scatter'));
+new ResizeObserver(drawScatter).observe($('scatter'));
 $('scatter-csv').addEventListener('click', () => {
   if (!scatterData) return;
   const {first, second, points, key} = scatterData;
