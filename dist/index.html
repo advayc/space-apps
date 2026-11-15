@@ -189,7 +189,20 @@
           <h3 id="chart-preview-title">Annual anomalies</h3>
           <a class="method-link" href="#full-chart">View larger chart <span aria-hidden="true">↓</span></a>
         </figcaption>
-        <canvas id="chart-preview" role="img" aria-label="Annual anomalies for the selected place across all years"></canvas>
+        <div class="chart-zoom" role="group" aria-label="Zoom the sidebar chart">
+          <button id="preview-zoom-out" class="utility" type="button" aria-label="Zoom out" disabled>−</button>
+          <button id="preview-zoom-in" class="utility" type="button" aria-label="Zoom in">+</button>
+          <button id="preview-zoom-reset" class="utility" type="button" disabled>All years</button>
+          <output id="preview-zoom-range" class="zoom-range"></output>
+        </div>
+        <div class="chart-interactive">
+          <canvas id="chart-preview" tabindex="0" aria-label="Annual anomalies for the selected place" aria-describedby="chart-help"></canvas>
+          <div id="preview-tooltip" class="chart-tooltip" hidden></div>
+        </div>
+        <div class="interval-header" id="preview-interval" hidden>
+          <output id="preview-interval-summary"></output>
+          <button id="preview-interval-clear" class="utility" type="button">Clear</button>
+        </div>
         <p class="chart-legend" aria-hidden="true">
           <span><i class="lg lg-obs"></i><span id="preview-primary-legend">Measured</span></span>
           <span id="preview-compare-legend" hidden><i class="lg lg-compare"></i>B record</span>
@@ -234,6 +247,23 @@
               <div><dt>Change</dt><dd id="interval-change"></dd></div>
             </dl>
           </div>
+          <details class="monthly-detail" id="monthly-detail">
+            <summary>Monthly detail</summary>
+            <div class="monthly-controls">
+              <label>Zoom <select id="monthly-span">
+                <option value="12">12 months</option>
+                <option value="24" selected>24 months</option>
+                <option value="60">60 months</option>
+              </select></label>
+              <button class="utility" id="monthly-earlier" type="button" aria-label="One year earlier">‹</button>
+              <button class="utility" id="monthly-later" type="button" aria-label="One year later">›</button>
+            </div>
+            <p id="monthly-status" role="status">Historical monthly anomalies</p>
+            <canvas id="monthly-chart" role="img" aria-label="Historical anomalies for consecutive months"></canvas>
+            <label class="sr-only" for="monthly-cursor">Inspect a month</label>
+            <input id="monthly-cursor" type="range">
+            <output id="monthly-readout" for="monthly-cursor"></output>
+          </details>
         </section>
         <div class="analysis-context">
           <section class="result" id="result" aria-labelledby="trend-title">
