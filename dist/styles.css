@@ -471,3 +471,9 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .methods .steps-list+p{margin-top:14px}
 .proj-figure{margin-bottom:22px}
 @media(max-width:560px){#proj-chart text{font-size:17px}#proj-chart .note{display:none}}
+
+/* ---------- Impacts page images ---------- */
+.impact-figure{margin:14px 0 16px;max-width:72ch}
+.impact-figure img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--card)}
+.impact-figure figcaption{margin-top:8px;font-size:13px;line-height:1.5;color:var(--muted)}
+.impact-figure .credit{display:block;margin-top:2px;font-size:11.5px}
