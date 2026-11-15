@@ -532,17 +532,27 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .month-interval output{font-size:13.5px;line-height:1.45}
 
 /* ---------- Scatterplot of two variables ---------- */
-.scatter-section{padding-top:16px;border-top:1px solid var(--line);display:grid;gap:12px}
-.scatter-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:10px 20px}
-.scatter-head h3{font-size:15px;font-weight:700}
-.scatter-pick{display:grid;gap:4px;font-size:12px;color:var(--muted)}
-.scatter-pick select{min-width:230px;max-width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:13.5px}
-#scatter-body{display:grid;gap:10px}
-#scatter-body[hidden]{display:none}
-.scatter-plot{position:relative;max-width:640px}
-#scatter{display:block;width:100%;height:clamp(260px,34vw,400px);cursor:crosshair}
-.scatter-summary{font-size:14.5px;line-height:1.5;font-weight:550;max-width:70ch}
-.scatter-options{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13px}
-.scatter-options label{display:inline-flex;align-items:center;gap:6px}
-.scatter-section > #scatter-body > .chart-help{max-width:78ch}
-.scatter-head{justify-content:flex-start;gap:10px 36px}
+.scatter-section{padding-top:18px;border-top:1px solid var(--line);display:grid;gap:14px}
+.scatter-intro h3{font-size:15px;font-weight:700}
+.scatter-picks{display:flex;flex-wrap:wrap;align-items:end;gap:10px 14px}
+.scatter-pick{display:grid;gap:5px;font-size:12px;color:var(--muted);flex:1 1 220px;max-width:320px}
+.scatter-pick b{display:inline-grid;place-items:center;width:18px;height:18px;margin-right:4px;border-radius:4px;background:var(--accent);color:var(--card);font:600 11px var(--mono)}
+.scatter-pick select{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:13.5px}
+.scatter-versus{padding-bottom:9px;font:500 12px var(--mono);color:var(--muted)}
+.scatter-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,320px);gap:18px;align-items:start}
+.scatter-body[hidden]{display:none}
+.scatter-plot{position:relative;min-width:0;padding:10px;border:1px solid var(--line);border-radius:7px;background:var(--card)}
+#scatter{display:block;width:100%;height:clamp(280px,32vw,420px);cursor:crosshair}
+.scatter-result{display:grid;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:7px;background:var(--control,#efefe7)}
+.scatter-r-label{font:500 11px var(--mono);color:var(--muted)}
+.scatter-r{margin-top:-6px;font:400 40px/1 var(--display);letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums}
+.scatter-summary{font-size:14.5px;line-height:1.4;font-weight:650}
+.scatter-facts{display:grid;gap:0;margin:0;border-block:1px solid var(--line)}
+.scatter-facts div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:12.5px}
+.scatter-facts div+div{border-top:1px solid var(--line)}
+.scatter-facts dt{color:var(--muted)}
+.scatter-facts dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.scatter-check{display:flex;align-items:flex-start;gap:7px;font-size:13px;line-height:1.35}
+.scatter-check input{margin-top:2px}
+.scatter-result .utility{justify-self:start}
+@media(max-width:760px){.scatter-body{grid-template-columns:1fr}.scatter-versus{display:none}.scatter-pick{max-width:none}}

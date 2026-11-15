@@ -2382,43 +2382,53 @@ function correlation(xs, ys) {
   return {r: sxy / Math.sqrt(sxx * syy), slope, intercept: my - slope * mx, n};
 }
 
+// One place's measured record for any layer, keyed by year. Layers use different grids,
+// so the cell is looked up from the selected coordinates each time.
+async function scatterSeries(key) {
+  const data = key === layer ? active : await loadDataset(key, periodKey());
+  const step = 360 / data.width;
+  const [lon, lat] = cell(point).center;
+  const col = clamp(Math.floor((((lon + 180) % 360 + 360) % 360) / step), 0, data.width - 1);
+  const row = clamp(Math.floor((90 - lat) / step), 0, data.height - 1);
+  const index = row * data.width + col;
+  const byYear = new Map();
+  for (let i = 0; i < data.observed; i++) byYear.set(data.years[i], data.values[i * data.size + index]);
+  return {name: data.name, unit: data.unit, byYear};
+}
+
 async function updateScatter() {
-  const key = $('scatter-layer').value;
-  for (const option of $('scatter-layer').options) option.disabled = option.value === layer;
+  const xKey = $('scatter-x').value || layer, yKey = $('scatter-layer').value;
+  $('scatter-x').options[0].textContent = 'On the map: ' + (catalog[layer]?.name ?? '');
+  for (const option of $('scatter-layer').options) option.disabled = option.value === xKey;
   const version = ++scatterVersion;
   scatterData = scatterHover = null;
-  $('scatter-body').hidden = !key;
+  $('scatter-body').hidden = !yKey;
   $('scatter-csv').disabled = true;
-  if (!key || !active || !chartData) { $('scatter-summary').textContent = ''; return; }
-  if (key === layer) {
-    $('scatter-summary').textContent = 'Pick a different variable from the one on the map.';
+  if (!yKey || !active || !chartData) { $('scatter-summary').textContent = ''; return; }
+  $('scatter-r').textContent = '—';
+  $('scatter-facts').replaceChildren();
+  if (yKey === xKey) {
+    $('scatter-summary').textContent = 'Pick two different variables.';
     drawScatter();
     return;
   }
-  $('scatter-summary').textContent = 'Loading ' + catalog[key].name + '…';
+  $('scatter-summary').textContent = 'Loading…';
   drawScatter();
-  let second;
+  let first, second;
   try {
-    second = await loadDataset(key, periodKey());
+    [first, second] = await Promise.all([scatterSeries(xKey), scatterSeries(yKey)]);
   } catch {
-    if (version === scatterVersion) $('scatter-summary').textContent = catalog[key].name + ' could not load for this period.';
+    if (version === scatterVersion) $('scatter-summary').textContent = 'One of these variables could not load for this period.';
     return;
   }
   if (version !== scatterVersion) return;
-  // The second layer may use a different grid, so look its cell up from the same coordinates.
-  const step = 360 / second.width;
-  const [lon, lat] = cell(point).center;
-  const col = clamp(Math.floor((((lon + 180) % 360 + 360) % 360) / step), 0, second.width - 1);
-  const row = clamp(Math.floor((90 - lat) / step), 0, second.height - 1);
-  const index = row * second.width + col;
-  const byYear = new Map();
-  for (let i = 0; i < second.observed; i++) byYear.set(second.years[i], second.values[i * second.size + index]);
   const points = [];
-  for (let i = 0; i < active.observed; i++) {
-    const x = chartData.series[i] ?? history(chartData.index)[i], y = byYear.get(active.years[i]);
-    if (Number.isFinite(x) && Number.isFinite(y)) points.push({year: active.years[i], x, y});
+  for (const [year, x] of first.byYear) {
+    const y = second.byYear.get(year);
+    if (Number.isFinite(x) && Number.isFinite(y)) points.push({year, x, y});
   }
-  scatterData = {key, second, points};
+  points.sort((p, q) => p.year - q.year);
+  scatterData = {key: xKey + '-vs-' + yKey, first, second, points};
   drawScatter();
 }
 
@@ -2433,24 +2443,29 @@ function drawScatter() {
   if (!scatterData) return;
   const dark = document.documentElement.dataset.theme === 'dark';
   const c = chartColors(dark);
-  const {second, points} = scatterData;
+  const {first, second, points} = scatterData;
   const flat = $('scatter-detrend').checked;
   const xs = flat ? detrend(points.map(p => p.x)) : points.map(p => p.x);
   const ys = flat ? detrend(points.map(p => p.y)) : points.map(p => p.y);
   const fit = correlation(xs, ys);
   $('scatter-csv').disabled = !points.length;
-  const period = periodTitle() === 'Annual' ? 'year' : periodTitle();
+  const fact = (label, value) => make('div', {}, make('dt', {}, label), make('dd', {}, value));
   if (!fit) {
+    $('scatter-r').textContent = '—';
+    $('scatter-facts').replaceChildren();
     $('scatter-summary').textContent = points.length
       ? 'Only ' + points.length + ' years have both variables here, too few for a correlation.'
       : 'No years have both variables at this place. Sea-only and land-only layers do not overlap.';
     if (!points.length) return;
   } else {
-    const size = Math.abs(fit.r), strength = size < .2 ? 'No clear' : size < .4 ? 'A weak' : size < .7 ? 'A moderate' : 'A strong';
-    $('scatter-summary').textContent = 'r = ' + signed(fit.r) + ' · ' + strength +
-      (size < .2 ? '' : fit.r > 0 ? ' positive' : ' negative') + ' relationship across ' + fit.n + ' years (' +
-      points[0].year + '–' + points.at(-1).year + '). ' + Math.round(fit.r * fit.r * 100) + '% of the variation is shared' +
+    const size = Math.abs(fit.r), strength = size < .2 ? 'No clear' : size < .4 ? 'Weak' : size < .7 ? 'Moderate' : 'Strong';
+    $('scatter-r').textContent = signed(fit.r);
+    $('scatter-summary').textContent = strength + (size < .2 ? '' : fit.r > 0 ? ' positive' : ' negative') + ' relationship' +
       (flat ? ', after removing each variable’s own trend.' : '.');
+    $('scatter-facts').replaceChildren(
+      fact('Years compared', fit.n + ' · ' + points[0].year + '–' + points.at(-1).year),
+      fact('Variation shared (r²)', Math.round(fit.r * fit.r * 100) + '%'),
+      fact('Line of best fit', signed(fit.slope) + ' ' + second.unit + ' per ' + first.unit));
   }
   const pad = (lo, hi) => { const m = (hi - lo || 1) * .06; return [lo - m, hi + m]; };
   const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
@@ -2471,7 +2486,7 @@ function drawScatter() {
     g.stroke();
   }
   g.font = '11px "IBM Plex Sans", sans-serif'; g.textAlign = 'center';
-  g.fillText(active.name + ' (' + active.unit + ')', (left + right) / 2, h - 5);
+  g.fillText(first.name + ' (' + first.unit + ')', (left + right) / 2, h - 5);
   g.save(); g.translate(11, (top + bottom) / 2); g.rotate(-Math.PI / 2);
   g.fillText(second.name + ' (' + second.unit + ')', 0, 0); g.restore();
   if (fit) {
@@ -2490,7 +2505,7 @@ function drawScatter() {
   if (scatterHover != null && points[scatterHover]) {
     const i = scatterHover, tooltip = $('scatter-tooltip');
     g.beginPath(); g.arc(px(xs[i]), py(ys[i]), 5.5, 0, Math.PI * 2); g.strokeStyle = c.marker; g.lineWidth = 1.5; g.stroke();
-    tooltip.textContent = points[i].year + '\n' + active.name + ' ' + signed(points[i].x) + ' ' + active.unit +
+    tooltip.textContent = points[i].year + '\n' + first.name + ' ' + signed(points[i].x) + ' ' + first.unit +
       '\n' + second.name + ' ' + signed(points[i].y) + ' ' + second.unit;
     tooltip.hidden = false;
     tooltip.style.left = clamp(px(xs[i]) < w / 2 ? px(xs[i]) + 10 : px(xs[i]) - tooltip.offsetWidth - 10, 0, w - tooltip.offsetWidth) + 'px';
@@ -2499,6 +2514,7 @@ function drawScatter() {
 }
 
 $('scatter-layer').addEventListener('change', updateScatter);
+$('scatter-x').addEventListener('change', updateScatter);
 $('scatter-detrend').addEventListener('change', drawScatter);
 $('scatter').addEventListener('pointermove', event => {
   if (!scatterLayout) return;
@@ -2514,11 +2530,11 @@ $('scatter').addEventListener('pointerleave', () => { if (scatterHover != null) 
 new ResizeObserver(() => { if (scatterData) drawScatter(); }).observe($('scatter'));
 $('scatter-csv').addEventListener('click', () => {
   if (!scatterData) return;
-  const {second, points, key} = scatterData;
-  const rows = [['year', active.name + ' (' + active.unit + ')', second.name + ' (' + second.unit + ')']]
+  const {first, second, points, key} = scatterData;
+  const rows = [['year', first.name + ' (' + first.unit + ')', second.name + ' (' + second.unit + ')']]
     .concat(points.map(p => [p.year, p.x, p.y]));
   saveBlob(new Blob([rows.map(row => row.map(v => typeof v === 'string' ? '"' + v + '"' : v).join(',')).join('\n') + '\n'],
-    {type: 'text/csv'}), exportName('vs-' + key, 'csv'));
+    {type: 'text/csv'}), exportName(key, 'csv'));
 });
 
 function exportName(kind, extension) {
@@ -2776,7 +2792,9 @@ function populateLayers() {
     groups.get(data.group).append(new Option(data.name, key));
   }
   $('layer').replaceChildren(...groups.values());
-  $('scatter-layer').replaceChildren(new Option('Choose a second variable…', ''),
+  $('scatter-layer').replaceChildren(new Option('Choose a variable…', ''),
+    ...[...groups.values()].map(group => group.cloneNode(true)));
+  $('scatter-x').replaceChildren(new Option('On the map', ''),
     ...[...groups.values()].map(group => group.cloneNode(true)));
   $('layer').value = layer;
   $('layer').disabled = false;

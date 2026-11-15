@@ -301,26 +301,33 @@
         </div>
       </div>
       <section class="scatter-section" aria-labelledby="scatter-title">
-        <div class="scatter-head">
-          <div>
-            <h3 id="scatter-title">Do two variables move together?</h3>
-            <p class="chart-help">Plot the variable on the map against a second one at this place. Each dot is one year.</p>
-          </div>
-          <label class="scatter-pick">Second variable
-            <select id="scatter-layer"><option value="">Choose a second variable…</option></select>
+        <div class="scatter-intro">
+          <h3 id="scatter-title">Do two variables move together?</h3>
+          <p class="chart-help">Choose two variables to plot against each other at this place. Each dot is one year.</p>
+        </div>
+        <div class="scatter-picks">
+          <label class="scatter-pick"><span><b>X</b> Across</span>
+            <select id="scatter-x"><option value="">On the map</option></select>
+          </label>
+          <span class="scatter-versus" aria-hidden="true">vs</span>
+          <label class="scatter-pick"><span><b>Y</b> Up</span>
+            <select id="scatter-layer"><option value="">Choose a variable…</option></select>
           </label>
         </div>
-        <div id="scatter-body" hidden>
+        <div id="scatter-body" class="scatter-body" hidden>
           <div class="scatter-plot">
             <canvas id="scatter" aria-label="Scatterplot of the two variables, one point per year" role="img"></canvas>
             <output id="scatter-tooltip" class="chart-tooltip" hidden></output>
           </div>
-          <p id="scatter-summary" class="scatter-summary" aria-live="polite"></p>
-          <div class="scatter-options">
-            <label><input type="checkbox" id="scatter-detrend"> Remove each variable’s long-term trend first</label>
+          <aside class="scatter-result" aria-label="Correlation result">
+            <p class="scatter-r-label">Correlation, r</p>
+            <p id="scatter-r" class="scatter-r">—</p>
+            <p id="scatter-summary" class="scatter-summary" aria-live="polite"></p>
+            <dl id="scatter-facts" class="scatter-facts"></dl>
+            <label class="scatter-check"><input type="checkbox" id="scatter-detrend"> Remove each variable’s long-term trend first</label>
             <button id="scatter-csv" class="utility" type="button" disabled>Download these points (CSV)</button>
-          </div>
-          <p class="chart-help">r runs from −1 to +1; values near 0 mean no straight-line relationship. Two variables that both rise over the decades will correlate even if neither affects the other, which is what removing the trend checks. A correlation does not show cause.</p>
+            <p class="chart-help">r runs from −1 to +1, and values near 0 mean no straight-line relationship. Two variables that both rise over the decades correlate even if neither affects the other; removing the trend checks for that. A correlation does not show cause.</p>
+          </aside>
         </div>
       </section>
       <div class="downloads">
