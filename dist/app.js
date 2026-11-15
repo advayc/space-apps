@@ -1338,6 +1338,7 @@ async function updateMonthlyDetail() {
   const key = [active.key, index, ...others.map(o => o.index)].join(':');
   if (key !== monthlyKey) {
     monthlyKey = key;
+    clearMonthlySelection();
     monthlyData = null;
     monthlyError = false;
     drawMonthlyDetail();
@@ -1374,17 +1375,41 @@ function monthlyRecords() {
   return records.filter(record => record.date > monthlyDate - span && record.date <= monthlyDate);
 }
 
-// Least-squares line through A's months in the visible window; null with fewer than 3 values.
+// Two clicked months (as dates) that bound the fitted span, like the yearly chart's two-point trend.
+let monthlyAnchor = null, monthlyEnd = null;
+
+// Least-squares line through A's values in `records`; null with fewer than 3 values.
 function monthlyFit(records) {
+  if (!records.length) return null;
+  const t0 = records[0].date;
   let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
-  records.forEach((record, i) => {
-    if (!Number.isFinite(record.primary)) return;
-    n++; sx += i; sy += record.primary; sxx += i * i; sxy += i * record.primary;
-  });
+  for (const record of records) {
+    if (!Number.isFinite(record.primary)) continue;
+    const t = record.date - t0;
+    n++; sx += t; sy += record.primary; sxx += t * t; sxy += t * record.primary;
+  }
   const spread = n * sxx - sx * sx;
   if (n < 3 || !spread) return null;
   const slope = (n * sxy - sx * sy) / spread;
-  return {slope, intercept: (sy - slope * sx) / n, perYear: slope * 12, count: n};
+  const intercept = (sy - slope * sx) / n;
+  return {perYear: slope * 12, count: n, start: t0, end: records.at(-1).date, at: date => intercept + slope * (date - t0)};
+}
+
+// The span the line covers: the two picked months, or else the months on screen.
+function monthlySelection() {
+  if (monthlyAnchor === null || monthlyEnd === null) return null;
+  return [Math.min(monthlyAnchor, monthlyEnd), Math.max(monthlyAnchor, monthlyEnd)];
+}
+
+function pickMonth(date) {
+  if (monthlyAnchor === null || monthlyEnd !== null) { monthlyAnchor = date; monthlyEnd = null; }
+  else if (date !== monthlyAnchor) monthlyEnd = date;
+  drawMonthlyDetail();
+  $('chart-announcement').textContent = $('month-interval-summary').textContent;
+}
+
+function clearMonthlySelection() {
+  monthlyAnchor = monthlyEnd = null;
 }
 
 function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
@@ -1407,15 +1432,27 @@ function paintMonthlyPlot(g, w, h, records, dark, k = 1) {
   }
   rest.forEach((b, n) => paintSeries(g, b, 0, b.length, x, y, compareColor(n, dark), 1.5 * k));
   paintSeries(g, a, 0, a.length, x, y, c.line, 1.5 * k);
-  const fit = monthlyFit(records);
-  if (fit) {
-    const end = records.length - 1;
-    g.save();
-    g.beginPath(); g.rect(left, top - 4 * k, right - left, bottom - top + 8 * k); g.clip();
-    g.beginPath(); g.moveTo(x(0), y(fit.intercept)); g.lineTo(x(end), y(fit.intercept + fit.slope * end));
-    g.strokeStyle = c.fit; g.lineWidth = 2 * k; g.stroke();
-    g.restore();
+  const selection = monthlySelection();
+  const fit = monthlyFit(selection && monthlyData
+    ? monthlyData.records.filter(record => record.date >= selection[0] && record.date <= selection[1]) : records);
+  const xd = date => x(date - records[0].date);
+  g.save();
+  g.beginPath(); g.rect(left, top - 4 * k, right - left, bottom - top + 8 * k); g.clip();
+  if (monthlyAnchor !== null) {
+    const endpoint = monthlyEnd ?? monthlyCursor ?? monthlyAnchor;
+    g.fillStyle = c.intervalFill;
+    g.fillRect(Math.min(xd(monthlyAnchor), xd(endpoint)), top, Math.abs(xd(monthlyAnchor) - xd(endpoint)), bottom - top);
+    for (const date of new Set([monthlyAnchor, monthlyEnd])) {
+      if (date === null) continue;
+      g.beginPath(); g.moveTo(xd(date), top); g.lineTo(xd(date), bottom);
+      g.strokeStyle = c.marker; g.lineWidth = k; g.stroke();
+    }
   }
+  if (fit) {
+    g.beginPath(); g.moveTo(xd(fit.start), y(fit.at(fit.start))); g.lineTo(xd(fit.end), y(fit.at(fit.end)));
+    g.strokeStyle = c.fit; g.lineWidth = 2 * k; g.stroke();
+  }
+  g.restore();
   const ticks = Math.max(2, Math.floor((right - left) / (70 * k)));
   for (let j = 0; j < ticks; j++) {
     const i = Math.round(j * (records.length - 1) / (ticks - 1));
@@ -1445,6 +1482,7 @@ function drawMonthlyDetail() {
   tooltip.hidden = true;
   monthlyWindow = null;
   $('chart-month-fit').hidden = true;
+  $('month-interval').hidden = true;
   $('chart-png').disabled = true;
   if (!ready) {
     $('chart-help').textContent = monthlyError ? 'Monthly data could not load. Choose Retry.' : 'Loading monthly observations…';
@@ -1455,10 +1493,22 @@ function drawMonthlyDetail() {
   $('chart-png').disabled = !layout.hasData;
   monthlyWindow = {records, ...layout};
   $('chart-month-fit').hidden = !layout.fit;
+  const selection = monthlySelection();
   if (layout.fit) $('chart-month-fit-text').textContent = 'Line of best fit' + (records[0].others.length ? ' for A' : '') +
-    ' · ' + signed(layout.fit.perYear) + ' ' + active.unit + ' per year over these ' + records.length + ' months';
+    ' · ' + signed(layout.fit.perYear) + ' ' + active.unit + ' per year ' +
+    (selection ? monthlyLabel(selection[0]) + '–' + monthlyLabel(selection[1]) : 'over these ' + records.length + ' months');
+  $('month-interval').hidden = monthlyAnchor === null;
+  if (monthlyAnchor !== null) {
+    const value = date => monthlyData.records.find(record => record.date === date)?.primary;
+    const metric = n => Number.isFinite(n) ? signed(n) + ' ' + active.unit : 'no data';
+    $('month-interval-summary').textContent = !selection ? monthlyLabel(monthlyAnchor) + ' selected. Pick another month.'
+      : monthlyLabel(selection[0]) + '–' + monthlyLabel(selection[1]) + ' · ' +
+        (layout.fit ? 'trend ' + signed(layout.fit.perYear) + ' ' + active.unit + ' per year' : 'not enough data for a trend') +
+        ' · start ' + metric(value(selection[0])) + ', end ' + metric(value(selection[1])) +
+        (Number.isFinite(value(selection[1]) - value(selection[0])) ? ', change ' + metric(value(selection[1]) - value(selection[0])) : '');
+  }
   $('chart-help').textContent = layout.hasData
-    ? 'Historical observations. The line of best fit covers the months shown, so it changes as you zoom or drag. Use + and − to zoom from 12 to 60 months, or the arrow keys to inspect a month.'
+    ? 'The line of best fit covers the months shown. Click two months to fit just that span. Use + and − to zoom from 12 to 60 months, drag to browse, or use the arrow keys and Enter.'
     : 'No observations in this window. Drag or zoom out to browse other months.';
   const i = records.findIndex(record => record.date === monthlyCursor);
   if (i < 0) return;
@@ -1511,9 +1561,23 @@ chart.addEventListener('pointerdown', event => {
   chart.setPointerCapture(event.pointerId);
   monthlyDrag = {x: event.clientX, end: monthlyDate};
 });
+chart.addEventListener('pointerup', event => {
+  if (!showMonthly || !monthlyWindow || !monthlyDrag || Math.abs(event.clientX - monthlyDrag.x) > 4) return;
+  const {left, right, records} = monthlyWindow;
+  const x = event.clientX - chart.getBoundingClientRect().left;
+  monthlyDrag = null;
+  monthlyCursor = records[Math.round(clamp((x - left) / (right - left), 0, 1) * (records.length - 1))].date;
+  pickMonth(monthlyCursor);
+});
+$('month-interval-clear').addEventListener('click', () => {
+  clearMonthlySelection();
+  drawMonthlyDetail();
+  chart.focus();
+});
 chart.addEventListener('pointermove', event => {
   if (!showMonthly || !monthlyWindow) return;
   const {left, right, records} = monthlyWindow;
+  if (monthlyDrag && Math.abs(event.clientX - monthlyDrag.x) <= 4) return;
   if (monthlyDrag) {
     monthlyDate = monthlyDrag.end - Math.round((event.clientX - monthlyDrag.x) / (right - left) * (records.length - 1));
     monthlyCursor = null;
@@ -1543,6 +1607,8 @@ chart.addEventListener('keydown', event => {
   if (event.key === '+' || event.key === '=') zoomMonthly(-1);
   else if (event.key === '-') zoomMonthly(1);
   else if (event.key === '0') resetMonthly();
+  else if (event.key === 'Enter' && monthlyCursor !== null) pickMonth(monthlyCursor);
+  else if (event.key === 'Escape' && monthlyAnchor !== null) { clearMonthlySelection(); drawMonthlyDetail(); }
   else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     const {records} = monthlyWindow;
     const offset = event.key === 'ArrowLeft' ? -1 : 1;
@@ -2407,7 +2473,8 @@ $('chart-png').addEventListener('click', () => {
   const fit = chartFit(central);
   const legend = [[c.line, other ? 'A · ' + placeName : 'Measured', false]];
   for (const o of others) legend.push([compareColor(o.n, dark), o.label + ' · ' + o.name, false]);
-  if (showMonthly && monthlyWindow?.fit) legend.push([c.fit, 'Line of best fit · ' + signed(monthlyWindow.fit.perYear) + ' ' + active.unit + ' per year', false]);
+  if (showMonthly && monthlyWindow?.fit) legend.push([c.fit, 'Line of best fit · ' + signed(monthlyWindow.fit.perYear) + ' ' + active.unit + ' per year' +
+    (monthlySelection() ? ' · ' + monthlySelection().map(monthlyLabel).join('–') : ''), false]);
   if (fit && !showMonthly) legend.push([c.fit, 'Trend line ' + active.years[fit.start] + '–' + active.years[fit.end], false]);
   if (future && !showMonthly) legend.push([c.proj, other ? 'A projection and range' : 'Projection to ' + active.years.at(-1) + ' with 95% range', true]);
   if (others.some(o => o.future) && !showMonthly) legend.push([c.text, others.length > 1 ? 'Comparison projections' : 'B projection', true]);

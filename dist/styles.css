@@ -528,3 +528,5 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 .place-search .compare-hint{margin:0 0 6px}
 
 #full-chart:not(.showing-months) .month-legend{display:none}
+#full-chart:not(.showing-months) .month-interval{display:none}
+.month-interval output{font-size:13.5px;line-height:1.45}

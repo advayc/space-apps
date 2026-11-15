@@ -242,6 +242,12 @@
           </p>
           <p id="chart-help" class="chart-help">The line fits this place’s measured record. Select two points to fit that span.</p>
           <span id="chart-announcement" class="sr-only" role="status"></span>
+          <div id="month-interval" class="chart-interval month-interval" hidden>
+            <div class="interval-header">
+              <output id="month-interval-summary" aria-live="polite"></output>
+              <button id="month-interval-clear" class="utility" type="button">Clear</button>
+            </div>
+          </div>
           <div id="chart-interval" class="chart-interval" hidden>
             <div class="interval-header">
               <output id="interval-summary" aria-live="polite"></output>
