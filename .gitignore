@@ -1,4 +1,5 @@
 .DS_Store
+deployment-output/
 __pycache__/
 .openai/*
 !.openai/hosting.json

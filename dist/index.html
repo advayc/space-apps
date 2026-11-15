@@ -28,6 +28,7 @@
 <script defer src="assets/d3-array.min.js"></script>
 <script defer src="assets/d3-geo.min.js"></script>
 <script defer src="assets/topojson.min.js"></script>
+<script src="asset-base.js"></script>
 <script type="module" src="app.js"></script>
 <script type="module" src="landing.js"></script>
 </head>
@@ -49,8 +50,8 @@
       <h1>See how the climate has changed where you live.</h1>
       <p class="lede">Pick any place on Earth and read its historical climate data.</p>
       <form class="hero-search" id="hero-search" role="search">
-        <label class="sr-only" for="hero-query">City or region</label>
-        <input id="hero-query" type="search" placeholder="Type a city, like Toronto" autocomplete="off" list="hero-places">
+        <label class="sr-only" for="hero-query">City, region, or coordinates</label>
+        <input id="hero-query" type="search" placeholder="City or coordinates, e.g. 43.65, -79.38" autocomplete="off" list="hero-places">
         <datalist id="hero-places"></datalist>
         <button class="cta" type="submit">Show this place</button>
       </form>
@@ -159,12 +160,12 @@
         <p class="location-meta"><span id="coordinates">73.00° N · 95.00° W</span><span id="resolution">2° grid</span></p>
       </div>
       <div class="place-search">
-        <label class="sr-only" id="place-query-label" for="place-query">Search cities and regions</label>
+        <label class="sr-only" id="place-query-label" for="place-query">Search places or coordinates</label>
         <p class="compare-hint place-hint" id="compare-hint" hidden>Search for a place to add, or <a href="#earth" id="compare-map">pick a cell on the map</a>.</p>
-        <div class="place-field"><input id="place-query" type="search" placeholder="Search a city or region…" autocomplete="off"
+        <div class="place-field"><input id="place-query" type="search" placeholder="Search a place or coordinates…" autocomplete="off"
           aria-autocomplete="list" aria-controls="place-results" aria-expanded="false" role="combobox">
         <ul id="place-results" role="listbox" hidden></ul></div>
-        <p class="place-hint">Search a city or enter decimal coordinates as latitude, longitude (e.g. 43.6532, -79.3832). Analysis uses the nearest grid cell.</p>
+        <p class="place-hint">Search a city or enter coordinates as latitude, longitude (e.g. 43.6532, -79.3832). Analysis uses the corresponding grid cell.</p>
         <div class="compare-controls">
           <button class="utility" id="compare" type="button" aria-pressed="false">Compare</button>
           <button class="utility" id="compare-clear" type="button" hidden>Clear all</button>

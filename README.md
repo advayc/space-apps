@@ -31,6 +31,10 @@ Every layer's dataset page and original NetCDF file are linked under **Where thi
 - **Projected** values are a statistical estimate from past data with a stated error range, not a climate model forecast.
 - Cities jump to the **nearest coarse grid cell** (~2°), not a weather station.
 
+## Deployment data
+
+Vercel builds the site with `node scripts/build-deployment.mjs`. The output excludes the binary climate grids and loads those files from a pinned public GitHub revision. Local development uses `dist/assets`. When updating the dataset, publish the new binary files to GitHub first, then update the revision and catalog file hash in the build script.
+
 ## References
 
 [1] Hansen, J., Ruedy, R., Sato, M., & Lo, K. (2010). “Global surface temperature change.” Reviews of Geophysics, 48(4), RG4004. https://doi.org/10.1029/2010RG000345

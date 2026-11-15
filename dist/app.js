@@ -118,7 +118,9 @@ const signed = (x, digits = 2) => {
 };
 
 async function fetchAsset(file) {
-  const response = await fetch('assets/' + file);
+  const base = file.endsWith('.bin') && window.ATLAS_DATA_BASE
+    ? window.ATLAS_DATA_BASE : 'assets/';
+  const response = await fetch(base + file);
   if (!response.ok) throw new Error(file + ': HTTP ' + response.status);
   return response;
 }
@@ -2118,34 +2120,23 @@ function normalizePlace(query) {
   return query.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
-function parseCoordinates(query) {
-  const match = query.trim().match(
-    /^\(?\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:,|\s+)\s*([+-]?(?:\d+(?:\.\d*)?|\.\.\d+))\s*\)?$/
-  );
-
+function coordinatePlace(query) {
+  const part = '([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))\\s*°?\\s*([NSEW]?)';
+  const match = query.trim().match(new RegExp('^\\(?\\s*' + part + '(?:\\s*,\\s*|\\s+)' + part + '\\s*\\)?$', 'i'));
   if (!match) return null;
-
-  const lat = Number(match[1]);
-  const lon = Number(match[2]);
-
-  if (
-    !Number.isFinite(lat) ||
-    !Number.isFinite(lon) ||
-    lat < -90 || lat > 90 ||
-    lon < -180 || lon > 180
-  ) return null;
-
-  return {
-    name: lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°',
-    region: 'Coordinates · nearest grid cell',
-    lat,
-    lon,
-    kind: 'coordinates',
-  };
+  const latitude = Number(match[1]), longitude = Number(match[3]);
+  const ns = match[2].toUpperCase(), ew = match[4].toUpperCase();
+  if (!['', 'N', 'S'].includes(ns) || !['', 'E', 'W'].includes(ew) ||
+      (ns && /^[+-]/.test(match[1])) || (ew && /^[+-]/.test(match[3])) ||
+      Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  const lat = ns === 'S' ? -latitude : latitude;
+  const lon = ew === 'W' ? -longitude : longitude;
+  if ((ns && latitude < 0) || (ew && longitude < 0)) return null;
+  return {name: locateCell(lon, lat), region: coords([lon, lat]), lat, lon, kind: 'coordinates'};
 }
 
 function searchPlaces(query) {
-  const coordinates = parseCoordinates(query);
+  const coordinates = coordinatePlace(query);
   if (coordinates) return [coordinates];
   const needle = normalizePlace(query);
   if (!needle) {
@@ -2184,7 +2175,7 @@ function renderPlaceResults(matches) {
     $('place-query').removeAttribute('aria-activedescendant');
     list.replaceChildren(Object.assign(document.createElement('li'), {
       className: 'place-empty',
-      textContent: 'No matching place. Enter decimal latitude, longitude (e.g. 43.6532, -79.3832), or click the map.',
+      textContent: 'No match. Enter a city or latitude, longitude, such as 43.65, -79.38.',
       role: 'presentation',
     }));
     list.hidden = false;
@@ -2244,8 +2235,8 @@ function setChoosingComparison(choosing) {
   closePlaceResults();
   const input = $('place-query');
   input.value = choosing ? '' : primaryQuery;
-  input.placeholder = choosing ? 'Search for a place to add…' : 'Search a city or region…';
-  $('place-query-label').textContent = choosing ? 'Search for a place to add' : 'Search cities and regions';
+  input.placeholder = choosing ? 'Search a place or coordinates…' : 'Search a place or coordinates…';
+  $('place-query-label').textContent = choosing ? 'Search for a comparison place or coordinates' : 'Search places or coordinates';
   $('compare').setAttribute('aria-pressed', choosing);
   $('compare-hint').hidden = !choosing;
   earth.setAttribute('aria-describedby', choosing ? 'compare-hint' : 'map-readout');
