@@ -267,8 +267,11 @@
           <h3 id="scatter-title">Do two variables move together?</h3>
           <p class="chart-help">Choose two variables to plot against each other at this place. Each dot is one year.</p>
         </div>
-        <label class="scatter-preset">Start with a preset
-          <select id="scatter-preset">
+        <div class="scatter-preset">
+          <label for="scatter-preset">Start with a preset</label>
+          <div class="scatter-preset-controls">
+          <button id="scatter-preset-prev" class="utility" type="button" aria-label="Previous preset" disabled>←</button>
+          <select id="scatter-preset" disabled>
             <option value="">Choose a pair…</option>
             <option value="temperature,precipitation">Temperature and precipitation</option>
             <option value="air,moisture">Air temperature and water vapor</option>
@@ -276,7 +279,9 @@
             <option value="cloud,shortwave">Cloud cover and sunlight</option>
             <option value="temperature,ice">Temperature and sea ice</option>
           </select>
-        </label>
+          <button id="scatter-preset-next" class="utility" type="button" aria-label="Next preset" disabled>→</button>
+          </div>
+        </div>
         <div class="scatter-picks">
           <label class="scatter-pick"><span><b>X</b> Across</span>
             <select id="scatter-x"><option value="">On the map</option></select>

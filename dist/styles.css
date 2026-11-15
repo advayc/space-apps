@@ -544,8 +544,10 @@ h1{font:650 clamp(38px,5.4vw,80px)/.98 var(--display);letter-spacing:-.04em;text
 /* ---------- Scatterplot of two variables ---------- */
 .scatter-section{padding-top:18px;border-top:1px solid var(--line);display:grid;gap:14px}
 .scatter-intro h3{font-size:15px;font-weight:700}
-.scatter-preset{display:grid;gap:5px;width:min(100%,320px);font-size:12px;color:var(--muted)}
-.scatter-preset select{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:13.5px}
+.scatter-preset{display:grid;gap:5px;width:min(100%,420px);font-size:12px;color:var(--muted)}
+.scatter-preset-controls{display:flex;gap:6px;align-items:stretch}
+.scatter-preset-controls button{flex:none;min-width:38px;font-size:17px}
+.scatter-preset select{flex:1;min-width:0;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);font:inherit;font-size:13.5px}
 .scatter-picks{display:flex;flex-wrap:wrap;align-items:end;gap:10px 14px}
 .scatter-pick{display:grid;gap:5px;font-size:12px;color:var(--muted);flex:1 1 220px;max-width:320px}
 .scatter-pick b{display:inline-grid;place-items:center;width:18px;height:18px;margin-right:4px;border-radius:4px;background:var(--accent);color:var(--card);font:600 11px var(--mono)}

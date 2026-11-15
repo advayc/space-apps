@@ -2594,15 +2594,31 @@ function drawScatter() {
   }
 }
 
-$('scatter-preset').addEventListener('change', event => {
-  if (!event.target.value) return;
-  const [x, y] = event.target.value.split(',');
+function updatePresetArrows() {
+  const select = $('scatter-preset'), index = select.selectedIndex;
+  $('scatter-preset-prev').disabled = select.disabled || index <= 1;
+  $('scatter-preset-next').disabled = select.disabled || index >= select.options.length - 1;
+}
+function applyScatterPreset() {
+  const select = $('scatter-preset');
+  updatePresetArrows();
+  if (!select.value) return;
+  const [x, y] = select.value.split(',');
   $('scatter-x').value = x;
   $('scatter-layer').value = y;
   updateScatter();
-});
+}
+$('scatter-preset').addEventListener('change', applyScatterPreset);
+for (const [id, step] of [['scatter-preset-prev', -1], ['scatter-preset-next', 1]]) {
+  $(id).addEventListener('click', () => {
+    const select = $('scatter-preset');
+    select.selectedIndex = Math.max(1, Math.min(select.options.length - 1, select.selectedIndex + step));
+    applyScatterPreset();
+  });
+}
 for (const id of ['scatter-layer', 'scatter-x']) $(id).addEventListener('change', () => {
   $('scatter-preset').value = '';
+  updatePresetArrows();
   updateScatter();
 });
 $('scatter-detrend').addEventListener('change', drawScatter);
@@ -2965,6 +2981,8 @@ function populateLayers() {
     ...[...groups.values()].map(group => group.cloneNode(true)));
   $('scatter-x').replaceChildren(new Option('On the map', ''),
     ...[...groups.values()].map(group => group.cloneNode(true)));
+  $('scatter-preset').disabled = false;
+  updatePresetArrows();
   $('layer').value = layer;
   $('layer').disabled = false;
 }
