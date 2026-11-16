@@ -59,8 +59,9 @@ The Sonic Waves built GQ Atlas for NASA's \emph{Be An Earth System Trend Detecti
 \item Read the small chart in the sidebar or choose \textbf{View larger chart}. Hover to inspect a point, zoom and pan through the record, or select two points to examine their span. The larger chart also has a Monthly view.
 \end{enumerate}
 \subsection*{Read the colors and numbers}
-An anomaly is a difference from a reference average. An anomaly of \(+1.2\,{}^\circ\mathrm{C}\) means a place was 1.2 degrees above its reference average for that period. Use the layer's legend to interpret color and units. Gray marks missing values. The map uses a fixed color scale across dates within each view.
-\note{A city label points to a grid cell and describes the surrounding area. Historical averages shows the baseline for the selected period and the mean anomaly across the available record. NASA GISTEMP already supplies anomalies, so its baseline is displayed as zero.}
+An anomaly measures departure from a reference average. A value of \(+1.2\,{}^\circ\mathrm{C}\) means the cell was 1.2 degrees above its reference average. The legend shows the units and a fixed color scale for the view. Gray marks missing values.
+
+City labels refer to grid cells. \textbf{Historical averages} shows the baseline and the mean anomaly across the available record. NASA GISTEMP supplies anomalies, so its reference level is zero.
 
 \clearpage
 \hypertarget{demo}{}
@@ -92,7 +93,7 @@ Atlas compares fitted rates over the same 30 measured years when both records ha
 \label{fig:pipeline}
 \end{figure}
 \subsection*{From a data file to an anomaly}
-Figure~\ref{fig:pipeline} summarizes how the records become projections. The Python script reads monthly NetCDF grids. When a product needs a baseline, the script subtracts each cell's reference average for the matching month, season or year. Annual and seasonal means weight each month by its number of days and require complete periods. A December--February season is named for the year containing January and February. Some grids are sampled onto the atlas grid using the nearest source point.
+Figure~\ref{fig:pipeline} summarizes how the records become projections. The Python script reads monthly NetCDF grids~\cite{atlas-methods,atlas-data-code}. When a product needs a baseline, the script subtracts each cell's reference average for the matching month, season or year. Annual and seasonal means weight each month by its number of days and require complete periods. A December--February season is named for the year containing January and February. Some grids are sampled onto the atlas grid using the nearest source point.
 
 \subsection{Compute the anomaly}
 For year \(t\) and a matching period \(p\), let \(z_{t,p}\) denote the source value. Atlas compares it with the historical mean \(\bar z_{\mathrm{ref},p}\) for the same cell and period:
@@ -126,7 +127,7 @@ Atlas fits the latest 30 measured years for the selected period. In a complete w
  \qquad
  \hat y_{\text{future}}(x)=\bar y+w b x.
 \]
-For instance, a slope twice its standard error keeps 75\% of its fitted value. This is the projection adjustment illustrated in Figure~\ref{fig:pipeline}. The significance panel uses its own Newey--West test.
+For instance, a slope twice its standard error keeps 75\% of its fitted value. This is the projection adjustment illustrated in Figure~\ref{fig:pipeline} and implemented in the Atlas source~\cite{atlas-statistics}. The significance panel uses its own Newey--West test.
 
 \subsection{Add year-to-year variation and a prediction range}
 The map shows a possible path. For each future year Atlas deterministically chooses a past year in the fitting window and adds that year's residual \(e_i\). Using the same historical index across cells helps retain the spatial pattern of past fluctuations. The central line shows the smoothed estimate. With a complete fit, the shaded prediction half-width at future centered time \(x\) is
@@ -134,7 +135,7 @@ The map shows a possible path. For each future year Atlas deterministically choo
  H_k=\min(2,1.25+0.03k)\,(2.0484)\,s
       \sqrt{1+\frac{1}{30}+\frac{x^2}{S_{xx}}},
 \]
-where \(k=0\) is the first projected year and \(2.0484\) is the 97.5th percentile of Student's \(t\) with 28 degrees of freedom. The multiplier was calibrated using hindcasts. The band is a range for an individual future value, separate from the confidence interval on the fitted historical slope.
+where \(k=0\) is the first projected year and \(2.0484\) is the 97.5th percentile of Student's \(t\) with 28 degrees of freedom. The multiplier was calibrated using hindcasts. NIST describes the standard single-observation prediction interval underlying this formula~\cite{nist-prediction}. The band is a range for an individual future value, separate from the confidence interval on the fitted historical slope.
 
 \subsection{Work through a projection}
 Suppose a complete 1996--2025 fit has a mean anomaly of \(0.60\,{}^\circ\mathrm{C}\), a slope of \(0.04\,{}^\circ\mathrm{C}\) per year, and \(\tau=2\). The fitted midpoint is 2010.5. For 2050, \(x=39.5\) and the adjusted slope is \(0.75\times0.04=0.03\,{}^\circ\mathrm{C}\) per year. The projected central value is \(0.60+0.03\times39.5\approx1.79\,{}^\circ\mathrm{C}\) above the reference average. This example uses hypothetical inputs. An actual cell's estimate and range depend on its 30 values and their variation.
@@ -143,12 +144,12 @@ With gaps, Atlas requires at least eight values in the window to fit a slope. It
 
 \clearpage
 \subsection{What the hindcasts tell us}
-A hindcast gives the algorithm only data available before a historical cutoff, then checks the estimate against later values already in the record. The project's \href{https://gqatlas.vercel.app/projections/}{Projections page} reports that about 93--98\% of later observations fell inside the adjusted bands across layers. It also reports that the temperature trend improved only slightly on a flat baseline and that other variables had no meaningful improvement. These checks describe the tested historical windows. They do not establish coverage for a different climate regime or the year 2100.
+A hindcast gives the algorithm only data available before a historical cutoff, then checks the estimate against later values already in the record. The project's \href{https://gqatlas.vercel.app/projections/}{Projections page} reports that about 93--98\% of later observations fell inside the adjusted bands across layers~\cite{atlas-projections}. It also reports that the temperature trend improved only slightly on a flat baseline and that other variables had no meaningful improvement. These checks describe the tested historical windows. They do not establish coverage for a different climate regime or the year 2100.
 
 \shot{\linewidth}{projection}{The Atlas Projections page shows the historical global temperature series, the recent fit, and the widening range.}
 
 \subsection{Read a projected value}
-Start with the measured record to see whether change persists across years. Then use the projected line to ask what continued change might look like. In Figure~\ref{fig:projection}, the Atlas's global surface-temperature calculation puts the 2100 central estimate at \(+2.99\,{}^\circ\mathrm{C}\), with a range of \(+2.10\) to \(+3.88\,{}^\circ\mathrm{C}\), relative to 1951--1980. Look at the band before quoting a late-century value: the width grows as the method extrapolates farther. The global average combines many cells and is usually smoother than a single location. The Projections page gives an illustrative spread around 2100 of roughly \(\pm0.9\,{}^\circ\mathrm{C}\) globally and \(\pm3.6\,{}^\circ\mathrm{C}\) for a typical cell. Local ranges vary. The Atlas fits past values and does not include future emissions pathways, physical feedbacks or policy changes. Use assessed climate-model scenarios for decisions that depend on future conditions.
+Start with the measured record to see whether change persists across years. Then use the projected line to ask what continued change might look like. In Figure~\ref{fig:projection}, the Atlas's global surface-temperature calculation puts the 2100 central estimate at \(+2.99\,{}^\circ\mathrm{C}\), with a range of \(+2.10\) to \(+3.88\,{}^\circ\mathrm{C}\), relative to 1951--1980. Look at the band before quoting a late-century value: the width grows as the method extrapolates farther. The global average combines many cells and is usually smoother than a single location. The Projections page gives an illustrative spread around 2100 of roughly \(\pm0.9\,{}^\circ\mathrm{C}\) globally and \(\pm3.6\,{}^\circ\mathrm{C}\) for a typical cell. Local ranges vary. The Atlas fits past values and does not include future emissions pathways, physical feedbacks or policy changes. The IPCC assesses climate-model projections under multiple emissions scenarios and describes additional sources of uncertainty~\cite{ipcc-projections}.
 
 \clearpage
 \section{Compare variables and explore hydrology}
@@ -174,17 +175,17 @@ These dates describe complete annual periods in the atlas snapshot. Monthly avai
 \textbf{Product} & \textbf{What Atlas uses} & \textbf{Annual dates}\\
 \midrule
 \href{https://data.giss.nasa.gov/gistemp/data_v4.html}{NASA GISS GISTEMP v4} & Land--Ocean Temperature Index. Surface temperature anomaly, \texttt{tempanomaly}, in degrees Celsius. & 1880--2025\\
-\href{https://psl.noaa.gov/data/gridded/data.gpcp.html}{NOAA PSL GPCP v2.3} & Satellite and gauge precipitation, in mm/day. & 1979--2025\\
-\href{https://psl.noaa.gov/data/gridded/data.noaa.ersst.v6.html}{NOAA PSL ERSST v6} & Reconstructed sea surface temperature, in degrees Celsius. & 1850--2025\\
-\href{https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html}{NCEP/NCAR Reanalysis 1 via NOAA PSL} & Air and skin temperature, water vapor, sea level pressure, wind speed and two components, cloud cover, topsoil moisture and temperature, incoming sunlight, latent and sensible heat flux, and outgoing longwave radiation. & 1948--2025\\
-\href{https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.html}{NOAA OISST v2} & Sea ice concentration anomaly, in percentage points. & 1982--2022\\
+\href{https://psl.noaa.gov/data/gridded/data.gpcp.html}{NOAA PSL GPCP v2.3} & Satellite and gauge precipitation, in mm/day~\cite{gpcp}. & 1979--2025\\
+\href{https://psl.noaa.gov/data/gridded/data.noaa.ersst.v6.html}{NOAA PSL ERSST v6} & Reconstructed sea surface temperature, in degrees Celsius~\cite{ersst6}. & 1850--2025\\
+\href{https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html}{NCEP/NCAR Reanalysis 1 via NOAA PSL} & Air and skin temperature, water vapor, sea level pressure, wind speed and two components, cloud cover, topsoil moisture and temperature, incoming sunlight, latent and sensible heat flux, and outgoing longwave radiation~\cite{reanalysis}. & 1948--2025\\
+\href{https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.html}{NOAA OISST v2} & Sea ice concentration anomaly, in percentage points~\cite{oisst}. & 1982--2022\\
 \bottomrule
 \end{tabularx}%
 }\par
 \subsection*{NASA dataset details}
-\textbf{GISTEMP v4.}~\cite{gistemp} Atlas uses the monthly 2-degree NetCDF grid with 1,200 km smoothing and a 1951--1980 reference. NASA combines land air observations and ocean surface temperature estimates in its Land--Ocean index. This grid drives the temperature map, place records and trends. The landing chart uses an area-weighted global mean of the annual grid. \href{https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz}{Exact NetCDF download}.
+\textbf{GISTEMP v4.}~\cite{gistemp,lenssen} Atlas uses the monthly 2-degree NetCDF grid with 1,200 km smoothing and a 1951--1980 reference. NASA combines land air observations and ocean surface temperature estimates in its Land--Ocean index. This grid drives the temperature map, place records and trends. The landing chart uses an area-weighted global mean of the annual grid. \href{https://data.giss.nasa.gov/pub/gistemp/gistemp1200_GHCNv4_ERSSTv5.nc.gz}{Exact NetCDF download}.
 
-\textbf{GLDAS-2.1 Noah monthly.}~\cite{gldas} The optional explorer requests \texttt{GLDAS\_NOAH025\_M} v2.1 model estimates at selected coordinates on a 0.25-degree land grid, with records beginning in 2000. The \href{https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series}{GES DISC Hydrology Time Series tool} and Giovanni API support point-series access. The model data are plotted after CSV import.
+\textbf{GLDAS-2.1 Noah monthly.}~\cite{gldas} The optional explorer requests \texttt{GLDAS\_NOAH025\_M} v2.1 model estimates at selected coordinates on a 0.25-degree land grid, with records beginning in 2000. The \href{https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series}{GES DISC Hydrology Time Series tool} and Giovanni API support point-series access. The model data are plotted after CSV import~\cite{nasa-hydrology}.
 
 \note{The NOAA-distributed anomaly layers use 1991--2020 cell baselines. A difference of one percentage point means, for example, a change from 20\% to 21\%. The \href{https://gqatlas.vercel.app/data-and-methods/}{Data and methods page} lists references and describes the treatment of missing data.}
 
@@ -194,17 +195,17 @@ These dates describe complete annual periods in the atlas snapshot. Monthly avai
 The Atlas trend panel translates a local rate into plain language and links to the broader \href{https://gqatlas.vercel.app/impacts/}{Impacts page}. The examples below suggest questions to investigate with the map and the underlying data.
 
 \begin{description}
-\item[Heat and water.] Use the temperature trend to identify regions where warmer conditions warrant a closer look. Then compare precipitation and soil moisture. Annual averages can hide seasonal water shortages or extreme heat. Examine the relevant month or season and consult daily records for extremes.
-\item[Ice and Arctic habitats.] Sea ice concentration measures the fraction of an ocean cell covered by ice. It can help frame questions about polar bear habitat, coastal access and seasonal change. Compare the same season across years and avoid treating a local concentration value as total Arctic ice extent.
-\item[Wildfires and coastal ecosystems.] Hot or dry periods can make conditions more favorable for wildfire. Satellite smoke imagery documents a specific event and does not attribute it to a particular trend. Warmer surface waters can contribute to coral heat stress, while actual bleaching risk depends on exposure duration and local conditions.
-\item[Animals on the move.] Temperature and habitat changes can shift the timing of migration and the range of suitable habitat. The site's animal examples illustrate questions about Arctic foxes, polar bears and seabirds. To test a range shift, compare the climate series with independent observations of where and when the species occurs.
+\item[Heat and water.] Use the temperature trend to identify regions where warmer conditions warrant a closer look. Then compare precipitation and soil moisture. Annual averages can hide seasonal water shortages or extreme heat. Examine the relevant month or season and consult daily records for extremes~\cite{ipcc-extremes}.
+\item[Ice and Arctic habitats.] Sea ice concentration measures the fraction of an ocean cell covered by ice. It can help frame questions about polar bear habitat, coastal access and seasonal change~\cite{ipcc-ecosystems}. Compare the same season across years and avoid treating a local concentration value as total Arctic ice extent.
+\item[Wildfires and coastal ecosystems.] Hot or dry periods can make conditions more favorable for wildfire. The NASA smoke image on the Impacts page documents a specific event in May 2023~\cite{nasa-smoke}. Warmer surface waters can contribute to coral heat stress, while actual bleaching risk depends on exposure duration and local conditions~\cite{noaa-coral}.
+\item[Animals on the move.] Temperature and habitat changes can shift the timing of migration and the range of suitable habitat~\cite{ipcc-ecosystems}. The site's animal examples illustrate questions about Arctic foxes, polar bears and seabirds. To test a range shift, compare the climate series with independent observations of where and when the species occurs.
 \end{description}
 
 \subsection{How this addresses NASA's challenge}
-The project turns NASA GISTEMP into a way to ask a testable question about a local record. A reader chooses a layer, compares places on a shared timeline, checks the slope and uncertainty, and can download the data to reproduce the result. The NASA GLDAS explorer lets readers ask whether modeled soil or water conditions tell a related story. NOAA layers broaden the questions readers can explore. The map shows where change occurs, the slope gives its direction and rate, and the confidence interval and p-value show how well that slope is supported. This brings data discovery, visualization and significance testing together for the \href{https://www.spaceappschallenge.org/2026/challenges/earth-system-trend-detective/}{NASA Space Apps challenge}.
+The project turns NASA GISTEMP into a way to ask a testable question about a local record. A reader chooses a layer, compares places on a shared timeline, checks the slope and uncertainty, and can download the data to reproduce the result. The NASA GLDAS explorer lets readers ask whether modeled soil or water conditions tell a related story. NOAA layers broaden the questions readers can explore. The map shows where change occurs, the slope gives its direction and rate, and the confidence interval and p-value show how well that slope is supported. This brings data discovery, visualization and significance testing together for the \href{https://www.spaceappschallenge.org/2026/challenges/earth-system-trend-detective/}{NASA Space Apps challenge}~\cite{spaceapps}.
 
 \noindent\begin{minipage}[t]{.52\linewidth}\vspace{0pt}\raggedright
-\textbf{Example investigation.} Compare the Canadian Arctic and Toronto with GISTEMP. Record the years and baseline, then distinguish the difference in 2025 anomalies from the fitted rates. Check sea ice in the same season and region as a follow-up. A teacher can use this exercise to show how a mapped pattern becomes a reproducible question about Earth system change. Regional research can help explain the pattern.
+\textbf{Example investigation.} Compare the Canadian Arctic and Toronto with GISTEMP. Record the years and baseline, then distinguish the difference in 2025 anomalies from the fitted rates. Check sea ice in the same season and region as a follow-up. Published research examines Arctic amplification over a wider region and longer period~\cite{arctic-amplification}. A teacher can use this exercise to show how a mapped pattern becomes a reproducible question about Earth system change. Regional research can help explain the pattern.
 \end{minipage}\hfill
 \begin{minipage}[t]{.44\linewidth}\vspace{0pt}
 \shot{\linewidth}{arctic-impacts}{Arctic satellite mosaic from the Atlas Impacts page. \href{https://commons.wikimedia.org/wiki/File:Mosaic_of_the_Arctic.jpg}{Image credit and source (NASA Earth Observatory)}.}
@@ -223,7 +224,7 @@ Download the primary place's values and fit as CSV or download the trend statist
 \item[Hardware] Development used a laptop. The site runs in web browsers on computers and phones.
 \end{description}
 \subsection*{Credits and AI use}
-The Sonic Waves built GQ Atlas for NASA Space Apps. The interface screenshots come from the Atlas website running locally. The two vector diagrams were redrawn from team-supplied flowcharts. Copies of the supplied diagrams are included with the source. The basemap uses Natural Earth through World Atlas. Third-party library notices are kept with the site assets. The site uses Bricolage Grotesque, IBM Plex Sans and IBM Plex Mono from Google Fonts. Some legacy place and boundary files lack recorded source versions.
+The Sonic Waves built GQ Atlas for NASA Space Apps. The interface screenshots come from the Atlas website running locally. The two vector diagrams were redrawn from team-supplied flowcharts. Copies of the supplied diagrams are included with the source. The basemap uses Natural Earth through World Atlas~\cite{natural-earth}. Third-party library notices are kept with the site assets. The site uses Bricolage Grotesque, IBM Plex Sans and IBM Plex Mono from Google Fonts. Some legacy place and boundary files lack recorded source versions.
 
 The project's submission notes credit Cursor and Anthropic Claude for earlier development. OpenAI Codex assisted with implementation, browser checks and this guide. Atlas computes its numeric results using dataset values and fixed statistical formulas.
 \subsection*{Further investigations}
@@ -237,19 +238,76 @@ Try comparing two familiar locations, checking whether an unusual year is part o
 \quad\textbullet\quad
 \href{https://github.com/advayc/space-apps}{Source repository}
 
+\clearpage
 \begingroup\small
-\begin{thebibliography}{9}
-\bibitem{gistemp} NASA Goddard Institute for Space Studies.
-\href{https://data.giss.nasa.gov/gistemp/}{GISS Surface Temperature Analysis (GISTEMP v4)}. Accessed November 15, 2026.
-N. Lenssen et al. \href{https://doi.org/10.1029/2023JD040179}{A GISTEMPv4 observational uncertainty ensemble}. \textit{Journal of Geophysical Research: Atmospheres}, 129(17), 2024.
-\bibitem{gldas} NASA Goddard Earth Sciences Data and Information Services Center.
-\href{https://ldas.gsfc.nasa.gov/gldas/dataset}{Global Land Data Assimilation System datasets}.
-\bibitem{newey-west} W. K. Newey and K. D. West.
-A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix.
-\textit{Econometrica}, 55(3), 703--708, 1987.
-\href{https://doi.org/10.2307/1913610}{doi:10.2307/1913610}.
-\bibitem{atlas-methods} The Sonic Waves.
-\href{https://gqatlas.vercel.app/data-and-methods/}{GQ Atlas Data and Methods}.
+\phantomsection\addcontentsline{toc}{section}{References}
+\begin{thebibliography}{99}
+\bibitem{spaceapps} NASA International Space Apps Challenge. 2026.
+\href{https://www.spaceappschallenge.org/2026/challenges/earth-system-trend-detective/}{Be An Earth System Trend Detective! Challenge description and resources}.
+
+\bibitem{gistemp} GISTEMP Team. 2026.
+\href{https://data.giss.nasa.gov/gistemp/}{GISS Surface Temperature Analysis (GISTEMP), version 4}. NASA Goddard Institute for Space Studies. Accessed November 15, 2026.
+
+\bibitem{lenssen} N. Lenssen, G. A. Schmidt, M. Hendrickson, P. Jacobs, M. J. Menne, and R. Ruedy. 2024.
+\href{https://doi.org/10.1029/2023JD040179}{A GISTEMPv4 observational uncertainty ensemble}. \textit{Journal of Geophysical Research: Atmospheres}, 129(17), e2023JD040179.
+
+\bibitem{gpcp} R. F. Adler et al. 2018.
+\href{https://doi.org/10.3390/atmos9040138}{The Global Precipitation Climatology Project (GPCP) monthly analysis (new version 2.3) and a review of 2017 global precipitation}. \textit{Atmosphere}, 9(4), 138.
+
+\bibitem{ersst6} NOAA National Centers for Environmental Information.
+\href{https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc%3AC01737}{NOAA Extended Reconstructed Sea Surface Temperature (ERSST), Version 6}. Dataset metadata.
+
+\bibitem{reanalysis} E. Kalnay et al. 1996.
+\href{https://doi.org/10.1175/1520-0477(1996)077%3C0437:TNYRP%3E2.0.CO;2}{The NCEP/NCAR 40-Year Reanalysis Project}. \textit{Bulletin of the American Meteorological Society}, 77(3), 437--471.
+
+\bibitem{oisst} NOAA Physical Sciences Laboratory.
+\href{https://psl.noaa.gov/data/gridded/data.noaa.oisst.v2.html}{NOAA Optimum Interpolation Sea Surface Temperature Analysis, Version 2}. Product documentation, including the monthly sea ice concentration archive.
+
+\bibitem{gldas} H. Beaudoing and M. Rodell, NASA/GSFC/HSL. 2020.
+\href{https://doi.org/10.5067/SXAVCZFAQLNO}{GLDAS Noah Land Surface Model L4 monthly, 0.25-degree, version 2.1}. NASA Goddard Earth Sciences Data and Information Services Center.
+
+\bibitem{nasa-hydrology} NASA Goddard Earth Sciences Data and Information Services Center.
+\href{https://disc.gsfc.nasa.gov/information/tools?title=Hydrology%20Time%20Series}{Hydrology Time Series}. Point-series access tool.
+
+\bibitem{newey-west} W. K. Newey and K. D. West. 1987.
+\href{https://doi.org/10.2307/1913610}{A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix}. \textit{Econometrica}, 55(3), 703--708.
+
+\bibitem{nist-prediction} NIST/SEMATECH.
+\href{https://itl.nist.gov/div898/handbook/pmd/section5/pmd512.htm}{How can I predict the value and estimate the uncertainty of a single response?} \textit{e-Handbook of Statistical Methods}, section 4.5.1.2.
+
+\bibitem{atlas-methods} The Sonic Waves. 2026.
+\href{https://gqatlas.vercel.app/data-and-methods/}{GQ Atlas Data and Methods}. Dataset processing, analysis, and credits.
+
+\bibitem{atlas-data-code} The Sonic Waves. 2026.
+\href{https://github.com/advayc/space-apps/blob/88e7cdf/scripts/prepare_data.py}{GQ Atlas data preparation code}.
+
+\bibitem{atlas-statistics} The Sonic Waves. 2026.
+\href{https://github.com/advayc/space-apps/blob/88e7cdf/dist/statistics.js}{GQ Atlas statistical implementation}. Trend estimates, significance tests, and projection calculations.
+
+\bibitem{atlas-projections} The Sonic Waves. 2026.
+\href{https://gqatlas.vercel.app/projections/}{GQ Atlas Projections}. Project methodology and reported hindcast coverage.
+
+\bibitem{ipcc-projections} IPCC. 2021.
+\href{https://www.ipcc.ch/report/ar6/wg1/chapter/chapter-4/}{Future Global Climate: Scenario-Based Projections and Near-Term Information}. Sixth Assessment Report, Working Group I, chapter 4.
+
+\bibitem{ipcc-extremes} IPCC. 2021.
+\href{https://www.ipcc.ch/report/ar6/wg1/chapter/chapter-11/}{Weather and Climate Extreme Events in a Changing Climate}. Sixth Assessment Report, Working Group I, chapter 11.
+
+\bibitem{ipcc-ecosystems} IPCC. 2022.
+\href{https://www.ipcc.ch/report/ar6/wg2/chapter/chapter-2/}{Terrestrial and Freshwater Ecosystems and Their Services}. Sixth Assessment Report, Working Group II, chapter 2.
+\href{https://www.ipcc.ch/report/ar6/wg2/chapter/chapter-3/}{Ocean and Coastal Ecosystems and Their Services}, chapter 3.
+
+\bibitem{arctic-amplification} M. Rantanen et al. 2022.
+\href{https://doi.org/10.1038/s43247-022-00498-3}{The Arctic has warmed nearly four times faster than the globe since 1979}. \textit{Communications Earth \& Environment}, 3, 168.
+
+\bibitem{nasa-smoke} NASA Earth Observatory. 2023.
+\href{https://science.nasa.gov/earth/earth-observatory/smoke-fills-north-american-skies-151346/}{Smoke Fills North American Skies}. GOES imagery of the May 2023 Canadian wildfires.
+
+\bibitem{noaa-coral} NOAA Coral Reef Watch.
+\href{https://coralreefwatch.noaa.gov/product/5km/index_5km_dhw.php}{Daily Global 5 km Satellite Coral Bleaching Heat Stress Degree Heating Week Product, version 3.1}.
+
+\bibitem{natural-earth} Natural Earth.
+\href{https://www.naturalearthdata.com/about/terms-of-use/}{Terms of use and public-domain data attribution}.
 \end{thebibliography}
 \endgroup
 \end{document}
