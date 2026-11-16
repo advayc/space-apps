@@ -1,0 +1,14 @@
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small]
+\node[box,fill=blue!6] (data) at (0,0) {NASA and NOAA\\data};
+\node[box,fill=orange!9] (anomaly) at (3.15,0) {Compute\\anomalies};
+\node[box,fill=orange!9] (fit) at (6.3,0) {Fit a 30-year\\trend};
+\node[decision,fill=violet!8] (strength) at (9.45,0) {Slope vs.\\noise};
+\node[box,fill=green!8] (projection) at (12.6,0) {Project through\\2100};
+\node[box,fill=orange!9] (shrink) at (9.45,-2.0) {Shrink the\\slope};
+\draw[route] (data) -- (anomaly);
+\draw[route] (anomaly) -- (fit);
+\draw[route] (fit) -- (strength);
+\draw[route] (strength) -- node[above,font=\scriptsize]{Strong} (projection);
+\draw[route] (strength) -- node[right,font=\scriptsize]{Weak} (shrink);
+\draw[route] (shrink) -| (projection);
+\end{tikzpicture}

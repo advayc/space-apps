@@ -1,0 +1,14 @@
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small]
+\node[box,fill=blue!6] (start) at (0,0) {Open the atlas};
+\node[box,fill=orange!9] (layer) at (3.15,0) {Pick a layer};
+\node[box,fill=orange!9] (place) at (6.3,0) {Pick a place};
+\node[decision,fill=violet!8] (compare) at (9.45,0) {Compare\\more?};
+\node[box,fill=green!8] (results) at (12.6,0) {See map, trend\\and graphs};
+\node[box,fill=orange!9] (add) at (9.45,-2.0) {Add another\\place};
+\draw[route] (start) -- (layer);
+\draw[route] (layer) -- (place);
+\draw[route] (place) -- (compare);
+\draw[route] (compare) -- node[above,font=\scriptsize]{No} (results);
+\draw[route] (compare) -- node[right,font=\scriptsize]{Yes} (add);
+\draw[route] (add) -| (results);
+\end{tikzpicture}

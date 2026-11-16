@@ -6,6 +6,8 @@ Pick a variable (temperature, rainfall, ice, and more), choose a place, and see 
 
 Live site: [gqatlas.vercel.app](https://gqatlas.vercel.app/)
 
+[User guide and methods (LaTeX)](docs/latex/)
+
 ![GQ Atlas overview](docs/atlas-overview.png)
 
 ![30-year trend view](docs/atlas-trend.png)
