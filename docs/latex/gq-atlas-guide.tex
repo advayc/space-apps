@@ -28,7 +28,7 @@
 \maketitle
 
 \begin{abstract}
-GQ Atlas is an interactive map and globe for exploring how climate has changed where you live. Choose a variable and a place, then use the timeline and charts to see what changed, how quickly, and how much uncertainty remains. This guide explains the interface, datasets, statistical methods, and how to reproduce an analysis.
+The Sonic Waves built GQ Atlas for NASA's \emph{Be An Earth System Trend Detective!} challenge. The Atlas turns NASA's gridded temperature record and other Earth science data into an interactive globe, local time series, and statistical tests. One example follows a question from map to evidence: in 2025, how much farther above its own historical average was the Canadian Arctic than Toronto? The guide reproduces that comparison, explains how the Atlas fits and tests trends, and shows how it extends recent patterns through 2100.
 \end{abstract}
 
 \begin{center}
@@ -148,7 +148,7 @@ A hindcast gives the algorithm only data available before a historical cutoff, t
 \shot{\linewidth}{projection}{The Atlas Projections page shows the historical global temperature series, the recent fit, and the widening range.}
 
 \subsection{Read a projected value}
-Use the observed history to decide whether a change is persistent. Use the projected line to ask what continued change might look like. Look at the band before quoting a late-century value: the width grows as the method extrapolates farther. The global average combines many cells and is usually smoother than a single location. The Projections page gives an illustrative spread around 2100 of roughly \(\pm0.9\,{}^\circ\mathrm{C}\) globally and \(\pm3.6\,{}^\circ\mathrm{C}\) for a typical cell. Local ranges vary. The Atlas fits past values and does not include future emissions pathways, physical feedbacks or policy changes. Use assessed climate-model scenarios for decisions that depend on future conditions.
+Start with the measured record to see whether change persists across years. Then use the projected line to ask what continued change might look like. In Figure~\ref{fig:projection}, the Atlas's global surface-temperature calculation puts the 2100 central estimate at \(+2.99\,{}^\circ\mathrm{C}\), with a range of \(+2.10\) to \(+3.88\,{}^\circ\mathrm{C}\), relative to 1951--1980. Look at the band before quoting a late-century value: the width grows as the method extrapolates farther. The global average combines many cells and is usually smoother than a single location. The Projections page gives an illustrative spread around 2100 of roughly \(\pm0.9\,{}^\circ\mathrm{C}\) globally and \(\pm3.6\,{}^\circ\mathrm{C}\) for a typical cell. Local ranges vary. The Atlas fits past values and does not include future emissions pathways, physical feedbacks or policy changes. Use assessed climate-model scenarios for decisions that depend on future conditions.
 
 \clearpage
 \section{Compare variables and explore hydrology}
