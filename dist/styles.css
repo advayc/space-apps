@@ -160,7 +160,8 @@ footer{display:flex;justify-content:space-between;gap:12px;font:500 10px var(--m
 .primary-symbol{border-radius:50%;color:#fffce8}
 .comparison-symbol{transform:rotate(45deg);color:#8ee3ff}
 .map-footer{justify-content:flex-start;border-top:1px solid #22383c;min-height:62px}
-footer{align-items:center}
+footer{align-items:center;flex-wrap:wrap}
+footer nav{display:flex;flex-wrap:wrap;gap:8px}
 [data-theme=dark]{color-scheme:dark;--paper:#101816;--card:#18241f;--ink:#e8eee4;--muted:#adbbad;--line:#35473c;--accent:#96ccaa;--control:#202e27;--hover:#293d31;--proj:#b7a6ff}
 :root{--compare:#14688b}
 [data-theme=dark]{--compare:#8ed9f3}
