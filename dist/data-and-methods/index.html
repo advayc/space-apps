@@ -52,18 +52,18 @@
     </section>
     <section>
       <h2>Monthly, seasonal, and annual anomalies</h2>
-      <p>Monthly anomalies compare the selected month with that same month in the reference period. Seasonal and annual means weight each month by its number of days and require every month in the period. Dec–Feb is labeled by the January and February year, so Dec–Feb 2025 starts in December 2024. The timeline steps through consecutive periods. Select two points on the location chart to compare their anomalies. The change is the end value minus the start value. The location chart follows the selected month or season across years.</p>
+      <p>Monthly anomalies compare the selected month with that same month in the reference period. Seasonal and annual means weighing each month by its number of days and requiring every month in the period. Dec–Feb is labeled by the January and February year, so Dec–Feb 2025 starts in December 2024. The timeline steps through consecutive periods. Select two points on the location chart to compare their anomalies. The change is the end value minus the start value. The location chart follows the selected month or season across years.</p>
       <p>NASA GISTEMP supplies monthly anomalies relative to 1951–1980. For the other layers, the atlas subtracts the cell’s 1991–2020 average for the matching period. Missing cells appear in gray. Resampled layers use the nearest grid point, and the map keeps a fixed color scale across years within each view.</p>
     </section>
     <section id="historical-averages">
       <h2>Historical averages</h2>
       <p>The inspector shows two averages for each selected grid cell and period. The baseline is the mean of the 30 values in 1991–2020 for the matching month, season, or year. Atlas reads it from the same source files and grid points used to calculate the anomalies. Percentage baselines are shown in percent, with their anomalies in percentage points. Temperatures supplied in kelvin are converted to Celsius for the baseline display.</p>
       <p>For GISTEMP, NASA publishes departures from the 1951–1980 reference. The baseline shown is zero on that anomaly scale. <a href="https://data.giss.nasa.gov/gistemp/faq/abs_temp.html">NASA’s explanation of absolute temperature</a></p>
-      <p>The record average takes the arithmetic mean of the available historical anomalies for the selected period. Atlas shows the first and last available years and the number of values used. The average excludes missing values and projections, even when the timeline shows a projected date.</p>
+      <p>The record average takes the mean of the available historical anomalies for the selected period. Atlas shows the first and last available years and the number of values used. The average excludes missing values and projections, even when the timeline shows a projected date.</p>
     </section>
     <section>
       <h2>Comparing two places</h2>
-      <p>Atlas subtracts B from A using the selected layer, year, and period for both cells. Each anomaly is relative to that cell’s own baseline. In the 30-year trend view the difference is between slopes ending in the selected year, expressed per decade. The side-by-side historical rates use the same 30 measured years when both cells have a complete window. The confidence interval and significance test in the inspector apply to the primary cell only.</p>
+      <p>After choosing places A and B, Atlas subtracts B from A using the selected layer, year, and period for both cells. Each anomaly is relative to that cell’s own baseline. In the 30-year trend view the difference is between slopes ending in the selected year, expressed per decade. The side-by-side historical rates use the same 30 measured years when both cells have a complete window. The confidence interval and significance test in the inspector apply to the primary cell only.</p>
       <p>For a projected date, the location panel compares the central estimates from the two cells. The chart shows a prediction range for the primary cell when available. The map shows one possible year, so map hover values can differ from the panel. The difference is unavailable when either cell lacks a value.</p>
     </section>
     <section id="trend-significance">
@@ -84,7 +84,7 @@
     </section>
     <section id="projections">
       <h2>Projected years</h2>
-      <p>The timeline continues past the last measured year to 2100, in violet. Formulas, the hindcast table, and limits are on the <a href="../projections/">projections</a> page.</p>
+      <p>The timeline continues past the last measured year to 2100, in violet. Limitations are on the <a href="../projections/">projections</a> page.</p>
     </section>
     <section id="downloads">
       <h2>Downloads and precision</h2>
